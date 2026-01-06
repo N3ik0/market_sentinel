@@ -38,7 +38,7 @@ class FeatureEngineer:
         self.df['Target_Price'] = self.df['Close'].shift(-horizon)
 
         # Target binaire : 1 si ça monte : 0
-        self.df['Target'] = (self.df['Target_Price'] > self.df['Close'].astype(int))
+        self.df['Target'] = (self.df['Target_Price'] > self.df['Close']).astype(int)
 
         # On supprime les dernières lignes qui n'ont pas de futur (les 5 derniers jours)
         self.df.dropna(inplace=True)
