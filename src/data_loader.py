@@ -24,6 +24,12 @@ class DataLoader:
             print(f"[!] Erreur : Aucun résultat pour {self.ticker}. Vérifier le symbole.")
             return pd.DataFrame()
 
+        # Si Yahoo renvoie un MultiIndex (Ticker en sous-colonne), on le simplifie
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        # On s'assure que l'index est bien au format Datetime (propre pour le ML)
+        df.index = pd.to_datetime(df.index)
+
         self.data = df
         print(f"[+] {len(self.data)} lignes récupérées.")
         return self.data
