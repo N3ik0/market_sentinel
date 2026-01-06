@@ -27,3 +27,20 @@ class FeatureEngineer:
         self.df.dropna(inplace=True)
         
         return self.df
+
+
+    def add_target(self, horizon: int = 5) -> pd.DataFrame:
+        """ Créé la colonne à prédire.
+            Target = 1 si le prix de clôture dans 'horizon' jours est supérieur au prix actuel
+        """
+        # Calcul de la variation du prix futur
+        # shift(-horizon) remonte les données du futur vers le présent
+        self.df['Target_Price'] = self.df['Close'].shift(-horizon)
+
+        # Target binaire : 1 si ça monte : 0
+        self.df['Target'] = (self.df['Target_Price'] > self.df['Close'].astype(int))
+
+        # On supprime les dernières lignes qui n'ont pas de futur (les 5 derniers jours)
+        self.df.dropna(inplace=True)
+
+        return self.df

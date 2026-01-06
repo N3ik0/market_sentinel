@@ -19,6 +19,9 @@ def main():
     # Récuperation des features (graph)
     fe = FeatureEngineer(data)
     data_enriched = fe.add_all_features()
+    data_final = fe.add_target(horizon=5)
+    print("\n--- Aperçu de la Target ---")
+    print(data_final[['Close', 'Target']].tail(10))
 
     print(f"Données enrichies pour {ticker}")
     print(data_enriched.tail())
