@@ -3,19 +3,19 @@
 from src.data_loader import DataLoader
 
 def main():
-    # Initialisation pour Nvidia
     ticker = "NVDA"
     loader = DataLoader(ticker)
 
-    # Récupération des données (1an, par jour)
-    data = loader.fetch_data(period= "1y", interval="1d")
+    # Test de chargemnt des données locales dans un premier temps
+    data = loader.load_from_parquet()
 
-    # Vérification rapide
-    if not data.empty:
-        print(f'\n--- Aperçu des données pour {ticker} ---')
-        print(data.head())
-    else:
-        print(f'[!] Échec de la récupération.')
+    # Si vide, on dl & sauvegarde
+    if data.empty:
+        print("[!] Données locales absences. Téléchargement...")
+        data = loader.fetch_data(period = "2y", interval="1d")
+        loader.save_to_parquet()
+
+    print(f"Prêt à travailler sur {len(data)} bougies pour {ticker}")
 
 if __name__ == "__main__":
     main()
