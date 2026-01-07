@@ -2,6 +2,7 @@
 
 from src.data_loader import DataLoader
 from src.features import FeatureEngineer
+from src.model import MarketModel
 
 def main():
     ticker = "NVDA"
@@ -26,6 +27,9 @@ def main():
     print(f"Données enrichies pour {ticker}")
     print(data_enriched.tail())
     print(f"Colonnes disponibles : {data_enriched.columns.tolist()}")
+
+    model = MarketModel()
+    model.train(data_final)
 
 if __name__ == "__main__":
     main()
