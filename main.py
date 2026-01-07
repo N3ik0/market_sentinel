@@ -1,54 +1,78 @@
-print("[*] Sentinel MVP - Mode Entraînement Qualitatif")
+print("[*] Sentinel MVP - Mode Entraînement & Publication Notion")
+import os
+from dotenv import load_dotenv
 from src.data_loader import DataLoader
 from src.features import FeatureEngineer
 from src.model import MarketModel
+from src.risk_manager import RiskManager
+from src.notion_publisher import NotionPublisher
+
+# 1. CHARGEMENT DES VARIABLES D'ENVIRONNEMENT
+# Charge le Token et l'ID de la Database depuis ton fichier .env
+load_dotenv()
 
 def main():
-    # 1. PARAMÈTRES DU MVP
-    ticker = "NVDA"
-    # On passe à 5 ans pour donner de la profondeur à XGBoost
+    # PARAMÈTRES DU MVP
+    ticker = "TSLA"
     period = "5y" 
     interval = "1d"
 
     print(f"[*] Onboarding du MVP sur {ticker} ({period})...")
 
-    # 2. CHARGEMENT DES DONNÉES
+    # 2. CHARGEMENT & PRÉPARATION DES DONNÉES
     loader = DataLoader(ticker)
-    # On force le fetch pour avoir les 5 ans si le parquet local est plus vieux
     data = loader.fetch_data(period=period, interval=interval)
     loader.save_to_parquet()
 
-    # 3. FEATURE ENGINEERING
-    # On prépare les indicateurs techniques
     fe = FeatureEngineer(data)
     data_enriched = fe.add_all_features()
-    
-    # On définit la cible à 5 jours (horizon de prédiction)
     data_final = fe.add_target(horizon=5)
 
-    # 4. ENTRAÎNEMENT DU MODÈLE XGBOOST
-    # C'est ici que ton nouveau src/model.py avec XGBoost va travailler
+    # 3. ENTRAÎNEMENT DU MODÈLE XGBOOST
     model = MarketModel()
     model.train(data_final)
 
-    # 5. ANALYSE DES COMPÉTENCES DU MODÈLE
-    # Affichage des indicateurs qui influencent le plus les décisions
+    # 4. ANALYSE DES COMPÉTENCES (Importance des features)
     model.get_feature_importance()
 
-    # 6. VÉRIFICATION DU SIGNAL ACTUEL (Live)
-    # On prend la dernière ligne connue pour voir ce que l'IA dit aujourd'hui
+    # 5. PRÉDICTION LIVE
     last_row = data_enriched.tail(1)
-    # On s'assure d'utiliser les mêmes features que lors de l'entraînement
     current_features = last_row[model.features]
     prediction = model.model.predict(current_features)[0]
 
-    print("\n" + "="*40)
-    print(f"   DIAGNOSTIC MVP - {ticker}")
-    print("="*40)
-    print(f"Signal IA (J+5) : {'🚀 HAUSSIER' if prediction == 1 else '📉 BAISSIER'}")
-    print(f"Prix actuel    : {round(last_row['Close'].values[0], 2)}$")
-    print(f"RSI actuel     : {round(last_row['RSI'].values[0], 2)}")
-    print("="*40)
+    # 6. GÉNÉRATION DU SCÉNARIO (Risk Management)
+    rm = RiskManager(rr_ratio=2.0, atr_multiplier=2.0)
+    plan = rm.generate_scenario(
+        ticker=ticker, 
+        current_price=last_row['Close'].values[0], 
+        prediction=prediction, 
+        df=data_enriched
+    )
+
+    # 7. PUBLICATION VERS NOTION
+    # Récupération des clés depuis le .env
+    token = os.getenv("NOTION_TOKEN")
+    db_id = os.getenv("ID_DB_SENTINEL")
+    
+    # Détermination de la confiance basée sur tes rapports de classification
+    # Précision ~65% pour la hausse, ~42% pour la baisse
+    confidence_score = 0.65 if prediction == 1 else 0.42
+
+    if token and db_id:
+        try:
+            publisher = NotionPublisher(token, db_id)
+            publisher.publish_plan(plan, confidence=confidence_score)
+            print(f"[+] Diagnostic terminé et publié sur Notion pour {ticker}")
+        except Exception as e:
+            print(f"[!] Erreur lors de la publication Notion : {e}")
+    else:
+        print("[!] Erreur : NOTION_TOKEN ou ID_DB_SENTINEL manquant dans le .env")
+
+    # 8. RÉSUMÉ CONSOLE RAPIDE
+    print("\n" + "═"*45)
+    print(f"Signal IA : {plan['direction']} | Prix : {plan['entry']}$")
+    print(f"SL : {plan['sl']}$ | TP : {plan['tp']}$")
+    print("═"*45 + "\n")
 
 if __name__ == "__main__":
     main()
