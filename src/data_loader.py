@@ -34,6 +34,16 @@ class DataLoader:
         print(f"[+] {len(self.data)} lignes récupérées.")
         return self.data
 
+        """ Récupération des données multi-timeframes
+        """
+        def fetch_mtf_data(self, intervals=["1d", "4h", "1h"]):
+            mtf_data = {}
+            for inter in intervals:
+                # On ajuste la période selon l'intervalle pour éviter les erreurs d'API
+                period = "2y" if inter == "1d" else "60d" 
+                mtf_data[inter] = self.fetch_data(period=period, interval=inter)
+            return mtf_data
+
     def save_to_parquet(self, folder: str = "data") -> str:
         """ Sauvegarde des données en parquet. 
         Args : 
