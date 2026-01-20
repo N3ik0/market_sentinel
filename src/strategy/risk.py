@@ -1,39 +1,41 @@
 import pandas as pd
 import numpy as np
+from typing import Dict, Any
 
 class RiskManager:
+    """Manages trade risk and position sizing logic."""
+    
     def __init__(self, rr_ratio: float = 2.0, atr_multiplier: float = 2.0):
-        """
-        rr_ratio : Le ratio Risk/Reward (on veut gagner X fois ce qu'on risque).
-        atr_multiplier : Coefficient pour placer le Stop Loss par rapport à la volatilité.
-        """
         self.rr_ratio = rr_ratio
         self.atr_multiplier = atr_multiplier
 
-    def generate_scenario(self, ticker: str, current_price: float, prediction: int, df: pd.DataFrame):
-        """
-        Prend une prédiction de l'IA (0 ou 1) et retourne un plan de trading.
-        """
-        # On récupère l'ATR le plus récent calculé dans tes features
+    def generate_scenario(self, ticker: str, current_price: float, prediction: int, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generates a trading plan based on prediction and volatility."""
+        
+        # Get latest ATR
         atr = df['ATR'].iloc[-1]
         
-        # Sécurité : si l'ATR est invalide, on utilise une volatilité par défaut de 2%
+        # Fallback if ATR is invalid
         if np.isnan(atr) or atr <= 0:
             atr = current_price * 0.02
 
-        if prediction == 1:  # Scénario LONG (Achat)
+        if prediction == 1:  # LONG
             direction = "LONG 🚀"
-            # Stop Loss : placé sous le prix actuel d'un multiple de la volatilité
             stop_loss = current_price - (atr * self.atr_multiplier)
             risk = current_price - stop_loss
-            # Take Profit : basé sur le ratio Risk/Reward
             take_profit = current_price + (risk * self.rr_ratio)
-        else:  # Scénario SHORT (Vente)
+            
+        elif prediction == 2:  # SHORT
             direction = "SHORT 📉"
-            # Stop Loss : placé au-dessus du prix actuel
             stop_loss = current_price + (atr * self.atr_multiplier)
             risk = stop_loss - current_price
             take_profit = current_price - (risk * self.rr_ratio)
+            
+        else: # NEUTRAL / WAIT
+            direction = "WAIT ⏳"
+            stop_loss = 0.0
+            take_profit = 0.0
+            risk = 0.0
 
         return {
             "ticker": ticker,
