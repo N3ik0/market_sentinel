@@ -6,11 +6,12 @@ from src.ml.predictor import MarketPredictor
 from src.strategy.risk import RiskManager
 
 class BacktestPipeline:
-    def __init__(self, ticker: str, initial_capital: float = 10000.0):
+    def __init__(self, ticker: str, initial_capital: float = 10000.0, threshold: float = 0.5):
         self.ticker = ticker
         self.capital = initial_capital
         self.balance = initial_capital
         self.trades = []
+        self.threshold = threshold
         
         # We use a temporary model for backtesting to avoid overwriting production models
         self.model_file = f"{ticker}_backtest.pkl" 
@@ -54,6 +55,11 @@ class BacktestPipeline:
             # Here we use the fixed model trained on past data.
             features = current_row[self.predictor.features].to_frame().T
             prediction = self.predictor.model.predict(features)[0]
+            confidence = self.predictor.predict_proba(features)
+            
+            # CONFIDENCE FILTER
+            if confidence < self.threshold:
+                prediction = 0 # Force Wait
             
             if prediction == 1: # SIGNAL LONG
                 price = current_row['Close']

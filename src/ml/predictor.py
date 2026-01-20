@@ -25,7 +25,8 @@ class MarketPredictor:
             random_state=42,
             objective='multi:softmax', # Multi-class classification
             num_class=3,               # 0 (Neutral), 1 (Long), 2 (Short)
-            eval_metric='mlogloss'     # LogLoss for multi-class
+            eval_metric='mlogloss',    # LogLoss for multi-class
+            early_stopping_rounds=20   # Stop if no improvement for 20 rounds
         )
 
     def train(self, df: pd.DataFrame):
@@ -58,6 +59,11 @@ class MarketPredictor:
     def predict(self, features_df: pd.DataFrame) -> int:
         """Predict single instance."""
         return self.model.predict(features_df[self.features])[0]
+
+    def predict_proba(self, features_df: pd.DataFrame) -> float:
+        """Returns the probability of the predicted class."""
+        probs = self.model.predict_proba(features_df[self.features])[0]
+        return max(probs) # Return confidence of winning class
 
     def save_model(self):
         """Save model to disk."""

@@ -35,8 +35,15 @@ class InferencePipeline:
         df_enriched = fe.generate_all()
         
         # 4. Predict on Latest Candle
+        # 4. Predict on Latest Candle
         last_row = df_enriched.tail(1)
         prediction = self.predictor.predict(last_row)
+        confidence_score = self.predictor.predict_proba(last_row)
+        print(f"[*] AI Prediction: {prediction} | Confidence: {confidence_score:.2%}")
+        
+        if confidence_score < 0.5:
+             print("[-] Confidence below 50%. Forcing WAIT.")
+             prediction = 0
         
         # 5. Risk Management
         rm = RiskManager(rr_ratio=2.0, atr_multiplier=2.0)
@@ -60,10 +67,8 @@ class InferencePipeline:
                 print("[-] Signal Neutral (Wait). No publication.")
                 return
 
-            confidence = 0.65 if prediction == 1 else 0.60 # Arbitrary for Short for now
-            
             client = NotionClient(settings.NOTION_TOKEN, settings.ID_DB_SENTINEL)
-            client.publish_trading_plan(plan, confidence)
+            client.publish_trading_plan(plan, confidence_score)
         except Exception as e:
             print(f"[!] Publishing failed: {e}")
 
