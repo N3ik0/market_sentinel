@@ -81,11 +81,15 @@ pip install -r requirements.txt
 *(Assurez-vous d'avoir configuré le fichier `.env`)*
 
 ### 2. Entraînement du Modèle
-Pour télécharger l'historique (par défaut 5 ans) et entraîner le modèle :
+Pour télécharger l'historique et entraîner le modèle :
 ```bash
+# Par défaut, utilise 5 ans d'historique (recommandé pour la production)
 python main.py train --ticker TSLA
+
+# Pour spécifier une durée personnalisée (max est souvent l'idéal)
+python main.py train --ticker TSLA --period max
 ```
-Cela génère un fichier `.pkl` dans `models/`.
+Cela génère un fichier `{TICKER}.pkl` dans `src/models/`.
 
 ### 3. Lancement du Scan (Inférence)
 Pour lancer l'analyse quotidienne et publier sur Notion :

@@ -77,9 +77,14 @@ class FeatureEngineer:
         self.df['Future_Close'] = self.df['Close'].shift(-horizon)
         self.df['Future_Return'] = (self.df['Future_Close'] - self.df['Close']) / self.df['Close']
         
+        # Asymmetric Thresholds
+        # In a generic bull market, we want to be stricter with Shorts
+        thresh_up = 0.03   # 3% gain to be a Long
+        thresh_down = 0.04 # 4% drop to be a Short
+        
         conditions = [
-            (self.df['Future_Return'] > threshold), # Strong Up
-            (self.df['Future_Return'] < -threshold)# Strong Down
+            (self.df['Future_Return'] > thresh_up),    # Strong Up
+            (self.df['Future_Return'] < -thresh_down)  # Strong Down
         ]
         choices = [1, 2]
         
