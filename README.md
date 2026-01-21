@@ -103,3 +103,14 @@ Pour valider la stratégie sur le passé (Paper Trading accéléré) et obtenir 
 ```bash
 python main.py backtest --ticker TSLA --period 2y
 ```
+
+---
+
+## 🔧 Documentation Technique
+
+Pour aller plus loin et comprendre le fonctionnement interne (Architecture, Pipelines, Calcul des indicateurs), consultez la **[Documentation Technique](TECHNICAL_docs.md)**.
+
+## ❓ Troubleshooting
+
+**Crash lors du `predict` (KeyError...) ?**
+Assurez-vous d'avoir téléchargé au moins **2 ans d'historique** (`period="2y"` dans inference.py) car certains indicateurs (comme Volatility Rank 252d) nécessitent 1 an de données minimum pour être calculés. Si l'historique est trop court, l'indicateur est manquant et le modèle crache. Notez que ce correctif a été appliqué dans la version `v1.1`.
