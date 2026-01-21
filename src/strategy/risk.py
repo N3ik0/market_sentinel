@@ -13,7 +13,15 @@ class RiskManager:
         """Generates a trading plan based on prediction and volatility."""
         
         # Get latest ATR
-        atr = df['ATR'].iloc[-1]
+        # Get latest ATR
+        if 'ATR_14' in df.columns:
+             atr = df['ATR_14'].iloc[-1]
+        elif 'ATR_20' in df.columns:
+             atr = df['ATR_20'].iloc[-1]
+        elif 'ATR' in df.columns:
+             atr = df['ATR'].iloc[-1]
+        else:
+             atr = 0.0 # Will trigger fallback below
         
         # Fallback if ATR is invalid
         if np.isnan(atr) or atr <= 0:

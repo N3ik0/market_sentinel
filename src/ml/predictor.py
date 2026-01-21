@@ -52,7 +52,14 @@ class MarketPredictor:
         
         print(f"[+] Global Accuracy: {accuracy_score(y_test, y_pred):.2%}")
         print("\n--- Classification Report ---")
-        print(classification_report(y_test, y_pred, target_names=['Neutral', 'Long', 'Short']))
+        
+        # FIX: Handle cases where not all classes are present in test set
+        # Map class ID to name
+        class_map = {0: 'Neutral', 1: 'Long', 2: 'Short'}
+        unique_classes = sorted(list(set(y_test) | set(y_pred)))
+        target_names = [class_map.get(c, str(c)) for c in unique_classes]
+        
+        print(classification_report(y_test, y_pred, labels=unique_classes, target_names=target_names))
         
         self.save_model()
 

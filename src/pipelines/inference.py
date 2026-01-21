@@ -25,8 +25,8 @@ class InferencePipeline:
             return
 
         # 2. Fetch Recent Data (Enough for indicators)
-        # We need at least 50 candles for EMA_50 + buffer
-        df = self.data_provider.fetch_data(period="6mo", interval="1d")
+        # We need at least 1 year + buffer for Vol_Rank20d (252 window)
+        df = self.data_provider.fetch_data(period="2y", interval="1d")
         if df.empty:
             return
 
