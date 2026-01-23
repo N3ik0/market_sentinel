@@ -224,30 +224,70 @@ class FeatureEngineer:
 
     def add_target(self, horizon: int = 5, threshold: float = 0.02) -> pd.DataFrame:
         """
-        Create multi-class target (kept from original).
+        Create multi-class target with Dynamic ATR thresholds.
         """
         self.df['Future_Close'] = self.df['Close'].shift(-horizon)
         self.df['Future_Return'] = (self.df['Future_Close'] - self.df['Close']) / self.df['Close']
         
-        thresh_up = 0.03   
-        thresh_down = 0.04 
+        # --- Dynamic Target Logic (ATR) ---
+        # Find ATR column (usually 'ATR_14')
+        atr_col = 'ATR_14'
+        # If not present in base, check suffixes (for 15m mode base is usually clean, but verify)
+        if atr_col not in self.df.columns:
+            # Try to startswith 'ATR'
+            atrs = [c for c in self.df.columns if c.startswith('ATR')]
+            if atrs: atr_col = atrs[0]
         
-        conditions = [
-            (self.df['Future_Return'] > thresh_up),    # Strong Up
-            (self.df['Future_Return'] < -thresh_down)  # Strong Down
-        ]
+        if atr_col in self.df.columns:
+            # Dynamic Threshold = 1.5 * ATR / Price
+            # We convert ATR value to percentage of price
+            self.df['ATR_Pct'] = self.df[atr_col] / self.df['Close']
+            
+            # Target = 1.5x ATR of movement
+            # We use a rolling mean of ATR Pct to stabilize targets? Or spot?
+            # Let's use spot ATR.
+            dynamic_thresh = 1.5 * self.df['ATR_Pct']
+            
+            # Clip minimum threshold to avoid noise (e.g. 0.5%)
+            dynamic_thresh = dynamic_thresh.clip(lower=0.005)
+            
+            conditions = [
+                (self.df['Future_Return'] > dynamic_thresh),   # Strong Up
+                (self.df['Future_Return'] < -dynamic_thresh)   # Strong Down
+            ]
+        else:
+            # Fallback to fixed
+            print("[!] ATR not found for dynamic target. Using fixed 3%.")
+            thresh_up = 0.03   
+            thresh_down = 0.03 
+            conditions = [
+                (self.df['Future_Return'] > thresh_up),
+                (self.df['Future_Return'] < -thresh_down)
+            ]
+
         choices = [1, 2]
         self.df['Target'] = np.select(conditions, choices, default=0)
         
-        # Use new ADX name if available (ADX_14_daily or ADX_14)
-        # We need to find the ADX column.
+        # --- Range Filtering (Anti-Chop) ---
+        # 1. ADX Filter: Increase to 25
         adx_cols = [c for c in self.df.columns if 'ADX' in c and 'daily' in c.lower()]
         if not adx_cols:
-             adx_cols = [c for c in self.df.columns if 'ADX' in c] # Fallback
+             adx_cols = [c for c in self.df.columns if 'ADX' in c] 
         
         if adx_cols:
             col = adx_cols[0]
-            self.df.loc[self.df[col] < 20, 'Target'] = 0
+            # Stricter: Force 0 if ADX < 25 (Choppy Market)
+            self.df.loc[self.df[col] < 25, 'Target'] = 0
+
+        # 2. BB Width Squeeze Filter
+        # If BB Width is in the bottom 20% percentile (Squeeze), avoid trading?
+        # Calculating percentile requires lookback.
+        # Let's check if BB_Width exists.
+        if 'BB_Width' in self.df.columns:
+             # Rolling 100 period 20th percentile
+             squeeze_threshold = self.df['BB_Width'].rolling(window=100).quantile(0.20)
+             # If current width < squeeze threshold -> Squeeze -> NEUTRAL
+             self.df.loc[self.df['BB_Width'] < squeeze_threshold, 'Target'] = 0
             
         self.df.dropna(inplace=True)
         return self.df
