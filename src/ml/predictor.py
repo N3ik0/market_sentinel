@@ -87,6 +87,7 @@ class MarketPredictor:
             print(f"[+] Model loaded from {self.model_path}")
         else:
             print(f"[!] Model file not found: {self.model_path}")
+            raise FileNotFoundError(f"Model file not found: {self.model_path}")
 
     def get_feature_importance(self):
         """Print feature importance."""

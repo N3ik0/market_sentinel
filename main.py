@@ -19,29 +19,32 @@ def main():
     train_parser = subparsers.add_parser("train", help="Train the model on historical data")
     train_parser.add_argument("--ticker", type=str, default="TSLA", help="Ticker symbol (default: TSLA)")
     train_parser.add_argument("--period", type=str, default="5y", help="Data period (default: 5y)")
+    train_parser.add_argument("--mode", type=str, default="swing", choices=["swing", "intraday"], help="Trading mode: swing or intraday")
     
     # Predict Command
     predict_parser = subparsers.add_parser("predict", help="Run inference and publish to Notion")
     predict_parser.add_argument("--ticker", type=str, default="TSLA", help="Ticker symbol (default: TSLA)")
+    predict_parser.add_argument("--mode", type=str, default="swing", choices=["swing", "intraday"], help="Trading mode: swing (Daily) or intraday (15m)")
 
     # Backtest Command
     backtest_parser = subparsers.add_parser("backtest", help="Simulate performance on past data")
     backtest_parser.add_argument("--ticker", type=str, default="TSLA", help="Ticker symbol")
     backtest_parser.add_argument("--period", type=str, default="2y", help="Data period")
+    backtest_parser.add_argument("--mode", type=str, default="swing", choices=["swing", "intraday"], help="Trading mode")
 
     
     args = parser.parse_args()
     
     if args.command == "train":
-        pipeline = TrainingPipeline(args.ticker)
+        pipeline = TrainingPipeline(args.ticker, mode=args.mode)
         pipeline.run(period=args.period)
         
     elif args.command == "predict":
-        pipeline = InferencePipeline(args.ticker)
+        pipeline = InferencePipeline(args.ticker, mode=args.mode)
         pipeline.run()
 
     elif args.command == "backtest":
-        pipeline = BacktestPipeline(args.ticker)
+        pipeline = BacktestPipeline(args.ticker, mode=args.mode)
         pipeline.run(period=args.period)
         
     else:

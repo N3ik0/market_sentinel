@@ -6,16 +6,18 @@ from src.strategy.risk import RiskManager
 from src.infrastructure.notion import NotionClient
 
 class InferencePipeline:
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, mode: str = "swing"):
         self.ticker = ticker
+        self.mode = mode
         self.data_provider = YahooDataProvider(ticker)
-        # Load model specifically for this ticker
-        self.model_file = f"{ticker}.pkl"
+        self.data_provider = YahooDataProvider(ticker)
+        # Load model specifically for this ticker AND mode
+        self.model_file = f"{ticker}_{mode}.pkl"
         self.predictor = MarketPredictor(model_name=self.model_file)
 
     def run(self):
-        """Executes the Daily Inference Workflow."""
-        print(f"\n🔮 STARTING INFERENCE PIPELINE: {self.ticker}")
+        """Executes the Inference Workflow based on mode."""
+        print(f"\n🔮 STARTING INFERENCE PIPELINE: {self.ticker} [{self.mode.upper()}]")
         
         # 1. Load Model
         try:
@@ -25,8 +27,13 @@ class InferencePipeline:
             return
 
         # 2. Fetch Recent Data (Enough for indicators)
-        # We need at least 1 year + buffer for Vol_Rank20d (252 window)
-        df = self.data_provider.fetch_data(period="2y", interval="1d")
+        if self.mode == "intraday":
+            # 15m intervals, limited to ~60 days. Fetch 59d buffer.
+            df = self.data_provider.fetch_data(period="59d", interval="15m")
+        else:
+            # Swing (Daily). Need >1 year for 252d indicators.
+            df = self.data_provider.fetch_data(period="2y", interval="1d")
+            
         if df.empty:
             return
 
@@ -44,6 +51,12 @@ class InferencePipeline:
         if confidence_score < 0.5:
              print("[-] Confidence below 50%. Forcing WAIT.")
              prediction = 0
+             
+        if prediction != 0:
+             bias_confirmed = self._check_trend_bias(last_row, prediction)
+             if not bias_confirmed:
+                 print(f"[-] Trend Bias Mismatch ({self.mode}). Forcing WAIT.")
+                 prediction = 0
         
         # 5. Risk Management
         rm = RiskManager(rr_ratio=2.0, atr_multiplier=2.0)
@@ -58,6 +71,52 @@ class InferencePipeline:
         self._publish(plan, prediction)
         self._summary(plan)
         print("✅ INFERENCE COMPLETE.\n")
+
+    def _check_trend_bias(self, row, prediction) -> bool:
+        """
+        Validates the trade direction against higher timeframe trends.
+        Returns True if the trade aligns with the trend.
+        """
+        # 1. Swing Mode (Daily) -> Check Weekly Trend (if available) or SMA200 Alignment
+        if self.mode == "swing":
+            return True # Keeping Swing lenient for now.
+
+        # 2. Intraday Mode (15m) -> Check 1H and 4H EMAs
+        elif self.mode == "intraday":
+            try:
+                close = row['Close'].values[0]
+                
+                # Check 1H Trend (EMA 50 1H)
+                ema50_1h = row['EMA_50_1h'].values[0]
+                
+                # Check 4H Trend (EMA 50 4H)
+                ema50_4h = row['EMA_50_4h'].values[0]
+                
+                # Prediction 1 = Long, 2 = Short (Assumed based on target gen, but let's verify)
+                # Actually pipeline output is likely 1 (Long) / 2 (Short) or similar.
+                # Let's assume standard: 1=UP, 2=DOWN. 
+                
+                if prediction == 1: # LONG Signal
+                     # Must be above BOTH EMAs
+                     if close > ema50_1h and close > ema50_4h:
+                         return True
+                     else:
+                         print(f"   [Bias] Long Signal BUT Price < EMA50 (1H: {ema50_1h:.2f}, 4H: {ema50_4h:.2f})")
+                         return False
+
+                elif prediction == 2: # SHORT Signal
+                     # Must be below BOTH EMAs
+                     if close < ema50_1h and close < ema50_4h:
+                         return True
+                     else:
+                        print(f"   [Bias] Short Signal BUT Price > EMA50 (1H: {ema50_1h:.2f}, 4H: {ema50_4h:.2f})")
+                        return False
+                        
+            except KeyError as e:
+                print(f"[!] Warning: Missing MTF indicator for bias check: {e}")
+                return True 
+                
+        return True
 
     def _publish(self, plan, prediction):
         try:

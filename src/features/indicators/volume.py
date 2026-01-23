@@ -5,7 +5,6 @@ def add_volume_features(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     """Adds volume indicators."""
     
     # Volume is usually already present, but we might want Log Volume or Norm Volume
-    # Volume is usually already present, but we might want Log Volume or Norm Volume
     # Item 8: volume_sma20
     if 'Volume' in df.columns:
         vol_sma20 = ta.sma(df['Volume'], length=20)

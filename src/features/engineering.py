@@ -42,23 +42,35 @@ class FeatureEngineer:
         
         # 2. Multi-Timeframe Logic
         # We define the desired higher timeframes to aggregates
-        # Note: We can only aggregate UP (1h -> 4h -> Daily). We cannot go Daily -> 1h.
+        # Note: We can only aggregate UP.
         
-        # Check if we can do 1h, 4h, Daily logic
-        # Simple heuristic: Check time delta
         if len(self.df) > 1:
             delta = self.df.index[1] - self.df.index[0]
             seconds = delta.total_seconds()
             
-            # If approx 1 Hour (3600s)
-            if 3500 <= seconds <= 3700:
-                print("Detected 1H data. Generating 4H, Daily, Weekly features...")
-                # 1H is Base (already generated with no suffix, or we rename?)
-                # User list asks for "rsi14_1h".
-                # Let's rename base features to include _1h if that matches user intent?
-                # User asking for "rsi14_daily" AND "rsi14_1h".
-                # If we are in 1H mode, base features are 1H.
+            # --- 15 Minute Data (~900s) ---
+            if 800 <= seconds <= 1000:
+                print(f"[*] Detected 15m data. Generating 1h, 4h, Daily features...")
                 
+                # Resample -> 1h
+                df_1h = self._resample_ohlcv(self.df, '1h')
+                df_1h = self._generate_features_for_df(df_1h, suffix="_1h")
+                self.df = self._merge_mtf(self.df, df_1h, suffix="_1h")
+                
+                # Resample -> 4h
+                df_4h = self._resample_ohlcv(self.df, '4h')
+                df_4h = self._generate_features_for_df(df_4h, suffix="_4h")
+                self.df = self._merge_mtf(self.df, df_4h, suffix="_4h")
+
+                # Resample -> Daily
+                df_d = self._resample_ohlcv(self.df, '1d')
+                df_d = self._generate_features_for_df(df_d, suffix="_daily")
+                self.df = self._merge_mtf(self.df, df_d, suffix="_daily")
+
+            # --- 1 Hour Data (~3600s) ---
+            elif 3500 <= seconds <= 3700:
+                print("Detected 1H data. Generating 4H, Daily, Weekly features...")
+
                 # Resample -> 4H
                 df_4h = self._resample_ohlcv(self.df, '4h')
                 df_4h = self._generate_features_for_df(df_4h, suffix="_4h")
@@ -74,29 +86,19 @@ class FeatureEngineer:
                 df_w = self._generate_features_for_df(df_w, suffix="_weekly")
                 self.df = self._merge_mtf(self.df, df_w, suffix="_weekly")
                 
-            # If approx 1 Day (86400s)
+            # --- Daily Data (~86400s) ---
             elif 86000 <= seconds <= 87000:
                 print("Detected Daily data. Generating Weekly features...")
-                # Base is Daily.
-                # Rename base columns to _daily to match request?
-                # The user list has "ema10_daily" etc.
-                # So we should probably apply suffix="_daily" to base if base is daily.
-                # But we already ran with suffix="" above.
-                # Let's just rename columns? Or re-run.
-                # Better: Run strictly based on detected freq.
                 
-                # Re-run base with "_daily" suffix
-                self.df = self.df[['Open', 'High', 'Low', 'Close', 'Volume']].copy() # reset
-                self._generate_features_for_df(self.df, suffix="_daily")
+                # Re-run base with "_daily" suffix for clarity/consistency if needed, 
+                # but currently we just keep suffix="" for base.
                 
                 # Resample -> Weekly
                 df_w = self._resample_ohlcv(self.df, '1W')
                 df_w = self._generate_features_for_df(df_w, suffix="_weekly")
                 self.df = self._merge_mtf(self.df, df_w, suffix="_weekly")
                 
-                print("Warning: Input data is Daily. Cannot generate 1h or 4h features.")
-
-        # 3. Add SMC / Structure (Optional but preserved)
+        # 3. Add SMC / Structure
         self._add_structure()
         
         self.df.dropna(inplace=True)

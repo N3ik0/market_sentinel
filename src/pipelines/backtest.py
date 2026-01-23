@@ -1,52 +1,95 @@
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
 from src.data.providers.yahoo import YahooDataProvider
 from src.features.engineering import FeatureEngineer
 from src.ml.predictor import MarketPredictor
 from src.strategy.risk import RiskManager
 
 class BacktestPipeline:
-    def __init__(self, ticker: str, initial_capital: float = 10000.0, threshold: float = 0.5):
+    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5):
         self.ticker = ticker
+        self.mode = mode
         self.capital = initial_capital
         self.balance = initial_capital
         self.trades = []
         self.threshold = threshold
         
         # We use a temporary model for backtesting to avoid overwriting production models
-        self.model_file = f"{ticker}_backtest.pkl" 
+        self.model_file = f"{ticker}_{mode}_backtest.pkl" 
         self.data_provider = YahooDataProvider(ticker)
         self.predictor = MarketPredictor(model_name=self.model_file)
 
     def run(self, period: str = "2y"):
-        print(f"\n🧪 STARTING BACKTEST: {self.ticker} | Capital: ${self.capital}")
+        print(f"\n🧪 STARTING BACKTEST: {self.ticker} [{self.mode.upper()}] | Capital: ${self.capital}")
         
+        # 0. Configure based on Mode
+        if self.mode == "intraday":
+            period = "59d"
+            interval = "15m"
+            horizon = 8
+        else:
+             interval = "1d"
+             horizon = 5
+
         # 1. Fetch Data
-        df = self.data_provider.fetch_data(period=period)
+        df = self.data_provider.fetch_data(period=period, interval=interval)
         if df.empty: return
 
         # 2. Features
         fe = FeatureEngineer(df)
         df = fe.generate_all()
-        df = fe.add_target(horizon=5)
+        df = fe.add_target(horizon=horizon)
         
-        # 3. Train/Test Split (Time Series)
-        split_idx = int(len(df) * 0.7) # Train on first 70%
-        train_df = df.iloc[:split_idx]
-        test_df = df.iloc[split_idx:]
+        # 3. Cross-Validation (Time Series Split)
+        print("[*] Running TimeSeries Cross-Validation (3 Splits)...")
+        tscv = TimeSeriesSplit(n_splits=3)
         
-        print(f"[*] Training on {len(train_df)} candles (Past). Backtesting on {len(test_df)} candles (Recent).")
+        fold = 1
+        results = []
         
-        # 4. Train Model (On Past Data Only)
-        self.predictor.train(train_df)
+        X = df # Full dataframe
         
-        # 5. Simulation Loop (Walk-Forward)
-        print("[*] Running simulation...")
+        for train_index, test_index in tscv.split(X):
+            train_df = X.iloc[train_index]
+            test_df = X.iloc[test_index]
+            
+            print(f"\n---> FOLD {fold}: Train ({len(train_df)}) | Test ({len(test_df)})")
+            
+            # Train on this fold
+            self.predictor.train(train_df)
+            
+            # Simulate on this fold
+            # Simulate on this fold
+            metrics = self._simulate(test_df)
+            if metrics:
+                results.append(metrics)
+            fold += 1
+            
+            # Reset balance for next fold or keep cumulative? 
+            # Standard CV resets to evaluate model performance, not cumulative wealth.
+            self.balance = self.capital 
+            self.trades = [] # Clear trades for next fold logic in simulate? 
+            # Actually _simulate currently uses self.trades and self.balance directly.
+            # I should refactor _simulate calls to be cleaner or just reset here.
+            
+        # Summarize CV Results
+        print("\n" + "═"*45)
+        print("📊 CV AGGREGATED RESULTS")
+        avg_win_rate = np.mean([r['win_rate'] for r in results])
+        avg_profit_factor = np.mean([r['profit_factor'] for r in results])
+        print(f"Avg Win Rate      : {avg_win_rate:.2f}%")
+        print(f"Avg Profit Factor : {avg_profit_factor:.2f}")
+        print("═"*45 + "\n")
+
+    def _simulate(self, test_df):
+        """Runs simulation on a specific test set."""
+        self.balance = self.capital
+        self.trades = []
         rm = RiskManager(rr_ratio=2.0, atr_multiplier=2.0)
         
         # Iterate through Test Data
-        # We need to look ahead, so stop before the very end
-        for i in range(len(test_df) - 5):
+        for i in range(len(test_df) - 8): # Buffer for horizon
             current_row = test_df.iloc[i]
             current_idx = test_df.index[i]
             
@@ -169,11 +212,17 @@ class BacktestPipeline:
                 "Balance": round(self.balance, 2)
             })
 
-        self._report()
+        return self._report(return_metrics=True)
 
-    def _report(self):
+    def _report(self, return_metrics=False):
         if not self.trades:
             print("[!] No trades taken by the model.")
+            if return_metrics:
+                return {
+                    "win_rate": 0.0,
+                    "profit_factor": 0.0,
+                    "final_balance": self.balance
+                }
             return
 
         df_res = pd.DataFrame(self.trades)
@@ -185,12 +234,16 @@ class BacktestPipeline:
         profit_factor = wins['PnL'].sum() / abs(losses['PnL'].sum()) if len(losses) > 0 else 0
         
         print("\n" + "═"*45)
-        print("📊 BACKTEST RESULTS")
+        print(f"📝 FOLD RESULTS")
         print(f"Final Balance : ${self.balance:,.2f} ({((self.balance-self.capital)/self.capital)*100:+.2f}%)")
         print(f"Total Trades  : {total_trades}")
         print(f"Win Rate      : {win_rate:.2f}%")
         print(f"Profit Factor : {profit_factor:.2f}")
         print("═"*45)
-        print("Last 5 Trades:")
-        print(df_res[['Date', 'Outcome', 'PnL', 'Balance']].tail(5).to_string(index=False))
-        print("═"*45 + "\n")
+        
+        if return_metrics:
+            return {
+                "win_rate": win_rate,
+                "profit_factor": profit_factor,
+                "final_balance": self.balance
+            }
