@@ -30,6 +30,13 @@ class BinanceDataProvider:
             if quote == 'USD':
                 quote = 'USDT'
             return f"{base}/{quote}"
+        
+        # Fallback for BTCUSD format
+        if ticker.endswith('USD') and '/' not in ticker:
+             # Heuristic: BTCUSD -> BTC/USDT
+             base = ticker[:-3]
+             return f"{base}/USDT"
+             
         return ticker.replace('-', '/')
 
     def fetch_data(self, period: str = "1y", interval: str = "1d") -> pd.DataFrame:

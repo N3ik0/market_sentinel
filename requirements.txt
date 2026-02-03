@@ -1,0 +1,9 @@
+python-dotenv
+pandas
+numpy
+pandas-ta
+ccxt
+yfinance
+xgboost
+scikit-learn
+metadata_parser

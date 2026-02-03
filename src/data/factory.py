@@ -27,6 +27,10 @@ class DataProviderFactory:
             if ticker in ['BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD']:
                  return BinanceDataProvider(ticker)
             
+            # Additional heuristic for non-hyphenated tickers (common user input)
+            if ticker in ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD']:
+                 return BinanceDataProvider(ticker)
+            
             # Or if it has USDT
             if 'USDT' in ticker:
                  return BinanceDataProvider(ticker)

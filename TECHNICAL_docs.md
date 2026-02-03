@@ -13,7 +13,9 @@ Le projet suit une **Clean Architecture** stricte pour séparer les responsabili
     *   `src/strategy/` : Logique de trading (Risk Management).
 4.  **Agnostic (ML & Data)** :
     *   `src/ml/` : Wrapper autour de XGBoost.
-    *   `src/data/` : Gestion sources (Yahoo) et stockage (Parquet).
+    *   `src/data/` : Gestion sources (Yahoo, Binance).
+        *   `factory.py` : Sélection automatique de la source (Crypto -> Binance, Autres -> Yahoo).
+        *   `providers/` : Implémentations spécifiques.
     *   `src/models/` : Persistance des modèles (`.pkl`).
 
 ---
