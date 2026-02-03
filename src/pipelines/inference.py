@@ -1,5 +1,5 @@
 from src.config.settings import settings
-from src.data.providers.yahoo import YahooDataProvider
+
 from src.features.engineering import FeatureEngineer
 from src.ml.predictor import MarketPredictor
 from src.strategy.risk import RiskManager
@@ -9,8 +9,13 @@ class InferencePipeline:
     def __init__(self, ticker: str, mode: str = "swing"):
         self.ticker = ticker
         self.mode = mode
-        self.data_provider = YahooDataProvider(ticker)
-        self.data_provider = YahooDataProvider(ticker)
+from src.data.factory import DataProviderFactory
+
+class InferencePipeline:
+    def __init__(self, ticker: str, mode: str = "swing", source: str = "auto"):
+        self.ticker = ticker
+        self.mode = mode
+        self.data_provider = DataProviderFactory.get_provider(ticker, source)
         # Load model specifically for this ticker AND mode
         self.model_file = f"{ticker}_{mode}.pkl"
         self.predictor = MarketPredictor(model_name=self.model_file)

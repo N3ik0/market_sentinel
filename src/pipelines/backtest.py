@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import TimeSeriesSplit
-from src.data.providers.yahoo import YahooDataProvider
+
 from src.features.engineering import FeatureEngineer
 from src.ml.predictor import MarketPredictor
 from src.strategy.risk import RiskManager
@@ -17,7 +17,20 @@ class BacktestPipeline:
         
         # We use a temporary model for backtesting to avoid overwriting production models
         self.model_file = f"{ticker}_{mode}_backtest.pkl" 
-        self.data_provider = YahooDataProvider(ticker)
+from src.data.factory import DataProviderFactory
+
+class BacktestPipeline:
+    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5, source: str = "auto"):
+        self.ticker = ticker
+        self.mode = mode
+        self.capital = initial_capital
+        self.balance = initial_capital
+        self.trades = []
+        self.threshold = threshold
+        
+        # We use a temporary model for backtesting to avoid overwriting production models
+        self.model_file = f"{ticker}_{mode}_backtest.pkl" 
+        self.data_provider = DataProviderFactory.get_provider(ticker, source)
         self.predictor = MarketPredictor(model_name=self.model_file)
 
     def run(self, period: str = "2y"):

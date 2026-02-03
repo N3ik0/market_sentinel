@@ -12,6 +12,8 @@ def add_volatility_features(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     atr14 = ta.atr(df['High'], df['Low'], df['Close'], length=14)
     if atr14 is not None:
         df[f'{prefix}ATR_14'] = atr14
+        # Add ATR % (normalized volatility)
+        df[f'{prefix}ATR_Pct'] = df[f'{prefix}ATR_14'] / df['Close']
 
     atr20 = ta.atr(df['High'], df['Low'], df['Close'], length=20)
     if atr20 is not None:

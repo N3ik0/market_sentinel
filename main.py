@@ -31,20 +31,26 @@ def main():
     backtest_parser.add_argument("--ticker", type=str, default="TSLA", help="Ticker symbol")
     backtest_parser.add_argument("--period", type=str, default="2y", help="Data period")
     backtest_parser.add_argument("--mode", type=str, default="swing", choices=["swing", "intraday"], help="Trading mode")
+    
+    # Global args (could be parent parser, but for now adding to each or just one)
+    # Ideally add to all or as a mixin. Simple way: Add to each.
+    train_parser.add_argument("--source", type=str, default="auto", choices=["auto", "yahoo", "binance"], help="Data Provider")
+    predict_parser.add_argument("--source", type=str, default="auto", choices=["auto", "yahoo", "binance"], help="Data Provider")
+    backtest_parser.add_argument("--source", type=str, default="auto", choices=["auto", "yahoo", "binance"], help="Data Provider")
 
     
     args = parser.parse_args()
     
     if args.command == "train":
-        pipeline = TrainingPipeline(args.ticker, mode=args.mode)
+        pipeline = TrainingPipeline(args.ticker, mode=args.mode, source=args.source)
         pipeline.run(period=args.period)
         
     elif args.command == "predict":
-        pipeline = InferencePipeline(args.ticker, mode=args.mode)
+        pipeline = InferencePipeline(args.ticker, mode=args.mode, source=args.source)
         pipeline.run()
 
     elif args.command == "backtest":
-        pipeline = BacktestPipeline(args.ticker, mode=args.mode)
+        pipeline = BacktestPipeline(args.ticker, mode=args.mode, source=args.source)
         pipeline.run(period=args.period)
         
     else:

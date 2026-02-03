@@ -241,7 +241,8 @@ class FeatureEngineer:
         if atr_col in self.df.columns:
             # Dynamic Threshold = 1.5 * ATR / Price
             # We convert ATR value to percentage of price
-            self.df['ATR_Pct'] = self.df[atr_col] / self.df['Close']
+            if 'ATR_Pct' not in self.df.columns:
+                self.df['ATR_Pct'] = self.df[atr_col] / self.df['Close']
             
             # Target = 1.5x ATR of movement
             # We use a rolling mean of ATR Pct to stabilize targets? Or spot?

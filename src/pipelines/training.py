@@ -1,5 +1,5 @@
 from src.config.settings import settings
-from src.data.providers.yahoo import YahooDataProvider
+
 from src.data.storage.filesystem import LocalStorage
 from src.features.engineering import FeatureEngineer
 from src.ml.predictor import MarketPredictor
@@ -8,7 +8,13 @@ class TrainingPipeline:
     def __init__(self, ticker: str, mode: str = "swing"):
         self.ticker = ticker
         self.mode = mode
-        self.data_provider = YahooDataProvider(ticker)
+from src.data.factory import DataProviderFactory
+
+class TrainingPipeline:
+    def __init__(self, ticker: str, mode: str = "swing", source: str = "auto"):
+        self.ticker = ticker
+        self.mode = mode
+        self.data_provider = DataProviderFactory.get_provider(ticker, source)
         self.storage = LocalStorage()
         # Save model specifically for this ticker AND mode
         self.model_file = f"{ticker}_{mode}.pkl"
