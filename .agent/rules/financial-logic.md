@@ -25,20 +25,20 @@ Prioritize these concepts for entry precision:
 
 ## Risk Management (NON-NEGOTIABLE)
 - **R/R Ratio:** Minimum Risk/Reward ratio is **1:2** (Swing) and can go up to **1:3** (Intraday).
-- **Stop Loss:** - **Dynamic:** Placed below/above the valid Swing Low/High or the Order Block on the *Execution Timeframe*.
-  - **ATR Buffer:** Add 1x ATR of the *Execution Timeframe* to avoid noise wicks.
+- **Stop Loss:** 
+    - **Dynamic:** Placed below/above the valid Swing Low/High or the Order Block on the *Execution Timeframe*.
+    - **ATR Buffer:** Add 1x ATR of the *Execution Timeframe* to avoid noise wicks.
 - **Session Logic (Intraday only):** Ignore signals generated outside London (08:00-11:00 UTC) or New York (13:00-17:00 UTC) sessions.
 
-## Asset Class Adaptation (Stocks vs Crypto)
-The system must handle both Asset Classes. Apply these specific logic variations:
+## Asset Class Logic
 
-### Crypto Specifics
+### Crypto (Active)
 - **Market Hours:** 24/7. No "Market Close" logic.
 - **Data Continuity:** Do not remove weekend data.
 - **Precision:** Prices must be handled with up to **8 decimal places** (Satoshis/Gwei).
 - **Exchange:** Prefer Binance or Bybit data over Yahoo Finance for Intraday accuracy.
 
-### Stock Specifics
-- **Market Hours:** Mon-Fri (Exchange specific).
-- **Gaps:** Overnight gaps are common and significant.
-- **Precision:** Standard 2 decimal places.
+### Stocks & Forex (Reserved for Future)
+- *Note:* Logic for these asset classes will be implemented in future modules implementing the generic `Asset` interface.
+- **Stocks:** Handle Mon-Fri market hours and overnight gaps.
+- **Forex:** Handle high leverage and tick data specifics.
