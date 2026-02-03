@@ -14,7 +14,10 @@ The system operates in two distinct modes. The logic must adapt accordingly:
 
 ### Mode 2: INTRADAY / SNIPER (Horizon: 1-3 Days)
 - **Bias/Trend Timeframe:** Daily (D1).
-- **Execution/Entry Timeframe:** 1 Hour (H1) or 4 Hours (H4).
+- **Setup Timeframe:** 1 Hour (H1) or 4 Hours (H4).
+- **Execution/Refinement Timeframe (Crypto):** 15 Minutes (M15) or 5 Minutes (M5).
+    *   *Note:* Use these lower timeframes ONLY for precise entry (e.g., waiting for MSS inside an H1 POI). Do not use for bias generation.
+    *   *Noise Warning:* Avoid M1 unless specifically scalping; M5/M15 provides the best signal-to-noise ratio for snipping.
 - **Target:** Capture volatility within the daily range or precise entry into a D1 trend.
 
 ## Smart Money Concepts (SMC) Implementation
