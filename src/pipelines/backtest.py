@@ -160,9 +160,9 @@ class BacktestPipeline:
                      if rsi <= 50:
                          print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} <= 50 - No Momentum)")
                          prediction = 0
-                     elif rsi >= 70:
-                         print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} >= 70 - Overbought)")
-                         prediction = 0
+                    #  elif rsi >= 70:
+                    #      print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} >= 70 - Overbought)")
+                    #      prediction = 0
                          
                  # SHORT Logic:
                  # 1. Must use "Momentum" (RSI < 50)

@@ -45,10 +45,10 @@ class FeatureEngineer:
             self.df['OrderFlow_Pct'] = self.df['OrderFlow_Net'] / self.df['Volume'].replace(0, 1)
             
             print("[+] Added OrderFlow_Net and OrderFlow_Pct features.")
-        else:
-            # Fill with 0 if missing (e.g. Backtesting on old Yahoo data? Or fallback)
-            self.df['OrderFlow_Net'] = 0
-            self.df['OrderFlow_Pct'] = 0
+        # else:
+        #     # Fill with 0 if missing (e.g. Backtesting on old Yahoo data? Or fallback)
+        #     self.df['OrderFlow_Net'] = 0
+        #     self.df['OrderFlow_Pct'] = 0
         
         # We will generate features for the Base timeframe first
         # We assume the base df is the highest frequency available (e.g. 1h or Daily)
