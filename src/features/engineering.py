@@ -32,6 +32,24 @@ class FeatureEngineer:
         # infer_freq is sometimes None, so we default to keeping it simple or checks
         base_freq = pd.infer_freq(self.df.index)
         
+        # --- CRYPTO VOLUME ADVANTAGE ---
+        if 'Taker_Buy_Vol' in self.df.columns:
+            # Net Order Flow = Taker Buy Vol - Taker Sell Vol
+            # Taker Sell Vol = Total Volume - Taker Buy Vol
+            # Result = Taker Buy - (Total - Taker Buy) = 2 * Taker Buy - Total
+            self.df['Taker_Sell_Vol'] = self.df['Volume'] - self.df['Taker_Buy_Vol']
+            self.df['OrderFlow_Net'] = self.df['Taker_Buy_Vol'] - self.df['Taker_Sell_Vol']
+            
+            # Normalize by Volume (Percentage of Dominance)
+            # Avoid div by zero
+            self.df['OrderFlow_Pct'] = self.df['OrderFlow_Net'] / self.df['Volume'].replace(0, 1)
+            
+            print("[+] Added OrderFlow_Net and OrderFlow_Pct features.")
+        else:
+            # Fill with 0 if missing (e.g. Backtesting on old Yahoo data? Or fallback)
+            self.df['OrderFlow_Net'] = 0
+            self.df['OrderFlow_Pct'] = 0
+        
         # We will generate features for the Base timeframe first
         # We assume the base df is the highest frequency available (e.g. 1h or Daily)
         

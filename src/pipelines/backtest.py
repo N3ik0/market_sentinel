@@ -147,17 +147,33 @@ class BacktestPipeline:
                             print(f"  [~] Skipped SHORT at {current_idx} (Price {price:.2f} > EMA200 {ema_val:.2f})")
                             prediction = 0
 
-            # RSI FILTER (Sanity Check)
+            # RSI MOMENTUM FILTER (Sniper Mode)
             # Find RSI column
             rsi_cols = [c for c in test_df.columns if 'RSI_14' in c]
             if rsi_cols:
                  rsi = current_row[rsi_cols[0]]
-                 if prediction == 1 and rsi > 70:
-                      print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} > 70)")
-                      prediction = 0
-                 elif prediction == 2 and rsi < 30:
-                      print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} < 30)")
-                      prediction = 0
+                 
+                 # LONG Logic: 
+                 # 1. Must use "Momentum" (RSI > 50)
+                 # 2. Must NOT be Overbought (RSI < 70)
+                 if prediction == 1:
+                     if rsi <= 50:
+                         print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} <= 50 - No Momentum)")
+                         prediction = 0
+                     elif rsi >= 70:
+                         print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} >= 70 - Overbought)")
+                         prediction = 0
+                         
+                 # SHORT Logic:
+                 # 1. Must use "Momentum" (RSI < 50)
+                 # 2. Must NOT be Oversold (RSI > 30)
+                 elif prediction == 2:
+                     if rsi >= 50:
+                         print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} >= 50 - No Momentum)")
+                         prediction = 0
+                     elif rsi <= 30:
+                         print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} <= 30 - Oversold)")
+                         prediction = 0
 
             # CONFIDENCE FILTER
             if confidence < self.threshold and prediction != 0:

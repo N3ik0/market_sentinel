@@ -76,39 +76,70 @@ class BinanceDataProvider:
         
         # Pagination Loop
         fetch_since = since_ts
+        market_id = self.symbol.replace('/', '') # basic normalization, or use self.exchange.market_id(self.symbol) if loaded
+        
         while True:
             try:
-                ohlcv = self.exchange.fetch_ohlcv(self.symbol, timeframe=timeframe, since=fetch_since, limit=1000)
-                if not ohlcv:
+                # Use raw public_get_klines to get Taker Buy Volume (Index 9)
+                # Params: symbol, interval, startTime, limit
+                params = {
+                    'symbol': market_id,
+                    'interval': timeframe,
+                    'startTime': int(fetch_since),
+                    'limit': 1000
+                }
+                
+                # Retrieve Raw Data
+                # [Open time, Open, High, Low, Close, Volume, Close time, Quote asset volume, Number of trades, Taker buy base asset volume, ...]
+                klines = self.exchange.public_get_klines(params)
+                
+                if not klines:
                     break
                 
-                all_ohlcv.extend(ohlcv)
+                all_ohlcv.extend(klines)
                 
-                last_timestamp = ohlcv[-1][0]
-                fetch_since = last_timestamp + 1
+                last_timestamp = klines[-1][0]
+                fetch_since = int(last_timestamp) + 1
                 
                 # Check if we reached now
-                if last_timestamp >= now - ( interval_ms := 15*60*1000 ): # Approx buffer
+                if int(last_timestamp) >= now - ( interval_ms := 15*60*1000 ):  
                     break
                     
                 time.sleep(self.exchange.rateLimit / 1000.0)
                 
             except Exception as e:
                 print(f"[!] Pagination Error: {e}")
+                # Fallback to standard fetch if raw fails? Or just break.
                 break
 
         if not all_ohlcv:
              print(f"[!] Warning: No data returned for {self.symbol}")
              return pd.DataFrame()
 
-        df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        # Columns for Raw Klines
+        columns = [
+            'timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 
+            'CloseTime', 'QuoteAssetVolume', 'Trades', 'Taker_Buy_Vol', 
+            'Taker_Buy_Quote_Vol', 'Ignore'
+        ]
+        
+        df = pd.DataFrame(all_ohlcv, columns=columns)
+        
+        # Type Conversion
+        numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Taker_Buy_Vol']
+        for col in numeric_cols:
+            df[col] = df[col].astype(float)
+            
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df.set_index('timestamp', inplace=True)
+        
+        # Drop unused columns to keep it clean
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume', 'Taker_Buy_Vol']]
         
         # Deduplicate
         df = df[~df.index.duplicated(keep='first')]
         
-        print(f"[+] {len(df)} rows fetched.")
+        print(f"[+] {len(df)} rows fetched (with Taker Volume).")
         return df
 
     def fetch_mtf_data(self, intervals: List[str] = None) -> Dict[str, pd.DataFrame]:
