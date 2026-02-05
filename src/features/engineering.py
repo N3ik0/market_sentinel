@@ -44,12 +44,13 @@ class FeatureEngineer:
         # We define the desired higher timeframes to aggregates
         # Note: We can only aggregate UP.
         
-        if len(self.df) > 1:
-            delta = self.df.index[1] - self.df.index[0]
-            seconds = delta.total_seconds()
+        # 2. Multi-Timeframe Logic
+        if len(self.df) > 2:
+            freq = pd.infer_freq(self.df.index)
+            print(f"[*] Inferred Frequency: {freq}")
             
-            # --- 15 Minute Data (~900s) ---
-            if 800 <= seconds <= 1000:
+            # --- 15 Minute Data ('15T' or '15min') ---
+            if freq == '15T' or freq == '15min':
                 print(f"[*] Detected 15m data. Generating 1h, 4h, Daily features...")
                 
                 # Resample -> 1h
@@ -67,8 +68,8 @@ class FeatureEngineer:
                 df_d = self._generate_features_for_df(df_d, suffix="_daily")
                 self.df = self._merge_mtf(self.df, df_d, suffix="_daily")
 
-            # --- 1 Hour Data (~3600s) ---
-            elif 3500 <= seconds <= 3700:
+            # --- 1 Hour Data ('H' or '1H') ---
+            elif freq == 'H' or freq == '1H':
                 print("Detected 1H data. Generating 4H, Daily, Weekly features...")
 
                 # Resample -> 4H
@@ -86,17 +87,23 @@ class FeatureEngineer:
                 df_w = self._generate_features_for_df(df_w, suffix="_weekly")
                 self.df = self._merge_mtf(self.df, df_w, suffix="_weekly")
                 
-            # --- Daily Data (~86400s) ---
-            elif 86000 <= seconds <= 87000:
+            # --- Daily Data ('D' or '1D') ---
+            elif freq == 'D' or freq == '1D':
                 print("Detected Daily data. Generating Weekly features...")
-                
-                # Re-run base with "_daily" suffix for clarity/consistency if needed, 
-                # but currently we just keep suffix="" for base.
                 
                 # Resample -> Weekly
                 df_w = self._resample_ohlcv(self.df, '1W')
                 df_w = self._generate_features_for_df(df_w, suffix="_weekly")
                 self.df = self._merge_mtf(self.df, df_w, suffix="_weekly")
+            
+            else:
+                 # Fallback or strict strict check? 
+                 # If None (gaps), we might want a fallback?
+                 # For now, user requested this specific check, so we respect strictness or maybe log warning.
+                 if not freq:
+                     print("[!] Warning: Could not infer frequency (Gaps in data?). Skipping MTF generation.")
+                 else:
+                     print(f"[!] Unhandled frequency: {freq}")
                 
         # 3. Add SMC / Structure
         self._add_structure()

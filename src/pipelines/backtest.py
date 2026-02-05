@@ -171,16 +171,21 @@ class BacktestPipeline:
                 
                 # Get Strategy Params
                 plan = rm.generate_scenario(self.ticker, price, prediction, test_df.iloc[:i+1])
-                sl = plan['sl']
-                risk_per_share = price - sl
+                initial_sl = plan['sl']
+                risk_per_share = price - initial_sl
                 
-                # TARGETS
-                tp = price + (risk_per_share * 3.0) # Fixed 3R
-                breakeven_trigger = price + risk_per_share # 1R Trigger
+                if risk_per_share <= 0: continue
                 
                 outcome = "HOLD"
                 pnl = 0
-                sl_moved_to_be = False
+                max_price = price 
+                sl = initial_sl
+                
+                # ATR for Trailing
+                # We can calculate separate ATR or use the risk_per_share as proxy (Risk = 2*ATR often in RiskManager)
+                # Let's derive rough ATR from Risk Distance
+                # If Risk = 2 * ATR -> ATR = Risk / 2
+                atr_val = risk_per_share / 2.0
                 
                 future_window = test_df.iloc[i+1 : i+50] 
                 
@@ -188,29 +193,26 @@ class BacktestPipeline:
                     current_high = future_row['High']
                     current_low = future_row['Low']
                     
-                    # Check Breakeven Trigger
-                    if not sl_moved_to_be and current_high >= breakeven_trigger:
-                        sl = price # Move SL to Entry
-                        sl_moved_to_be = True
-                        
-                    # Check TP Hit
-                    if current_high >= tp:
-                        outcome = "TP Hit (3R) 🚀"
-                        exit_price = tp
-                        qty = (self.balance * self.risk_pct) / risk_per_share
-                        pnl = qty * (exit_price - price)
-                        break
+                    # Update Trailing (3x ATR Width)
+                    if current_high > max_price:
+                        max_price = current_high
+                        # New SL is High - 3*ATR (Wider)
+                        new_sl = max_price - (3.0 * atr_val)
+                        if new_sl > sl:
+                            sl = new_sl
 
                     # Check SL Hit
                     if current_low <= sl:
-                        if sl_moved_to_be:
-                            outcome = "Breakeven 🛡️"
-                            pnl = 0
+                        if sl > price:
+                             outcome = "Trailing SL Hit 💰"
+                             pnl_per_share = sl - price
                         else:
-                            outcome = "SL Hit ❌"
-                            risk_amt = self.balance * self.risk_pct
-                            pnl = -risk_amt
+                             outcome = "SL Hit ❌"
+                             pnl_per_share = sl - price # Negative
+                             
                         exit_price = sl
+                        qty = (self.balance * self.risk_pct) / risk_per_share
+                        pnl = qty * pnl_per_share
                         break
                         
                 # Time Exit
@@ -225,16 +227,17 @@ class BacktestPipeline:
                 direction = "SHORT"
                 
                 plan = rm.generate_scenario(self.ticker, price, prediction, test_df.iloc[:i+1])
-                sl = plan['sl']
-                risk_per_share = sl - price
+                initial_sl = plan['sl']
+                risk_per_share = initial_sl - price
                 
-                # TARGETS
-                tp = price - (risk_per_share * 3.0) # Fixed 3R
-                breakeven_trigger = price - risk_per_share # 1R Trigger
+                if risk_per_share <= 0: continue
                 
                 outcome = "HOLD"
                 pnl = 0
-                sl_moved_to_be = False
+                min_price = price
+                sl = initial_sl
+                
+                atr_val = risk_per_share / 2.0
                 
                 future_window = test_df.iloc[i+1 : i+50]
                 
@@ -242,29 +245,25 @@ class BacktestPipeline:
                     current_high = future_row['High']
                     current_low = future_row['Low']
                     
-                    # Check Breakeven Trigger
-                    if not sl_moved_to_be and current_low <= breakeven_trigger:
-                        sl = price # Move SL to Entry
-                        sl_moved_to_be = True
-                        
-                    # Check TP Hit
-                    if current_low <= tp:
-                        outcome = "TP Hit (3R) 🚀"
-                        exit_price = tp
-                        qty = (self.balance * self.risk_pct) / risk_per_share
-                        pnl = qty * (price - exit_price) 
-                        break
-
+                    # Update Trailing
+                    if current_low < min_price:
+                        min_price = current_low
+                        new_sl = min_price + (3.0 * atr_val)
+                        if new_sl < sl:
+                            sl = new_sl
+                            
                     # Check SL Hit
                     if current_high >= sl:
-                        if sl_moved_to_be:
-                            outcome = "Breakeven 🛡️"
-                            pnl = 0
+                        if sl < price:
+                             outcome = "Trailing SL Hit 💰"
+                             pnl_per_share = price - sl
                         else:
-                            outcome = "SL Hit ❌"
-                            risk_amt = self.balance * self.risk_pct
-                            pnl = -risk_amt
+                             outcome = "SL Hit ❌"
+                             pnl_per_share = price - sl # Negative
+                        
                         exit_price = sl
+                        qty = (self.balance * self.risk_pct) / risk_per_share
+                        pnl = qty * pnl_per_share
                         break
 
                 if outcome == "HOLD":
