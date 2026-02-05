@@ -1,24 +1,26 @@
-# 🛡️ Market Sentinel - MVP (v1.0)
+# 🛡️ Market Sentinel - MVP (v1.2 - Active Dev)
 
-**Market Sentinel** est un écosystème d'aide à la décision boursière conçu pour éliminer les biais cognitifs via l'analyse quantitative et le Machine Learning. Le système scanne les marchés, entraîne un modèle prédictif et publie des scénarios de trading complets sur Notion.
+> **🚧 PROJET EN ÉVOLUTION CONSTANTE 🚧**
+> Ce projet est actuellement en phase de transition majeure vers le trading algorithmique **Crypto Intraday & Swing**. L'architecture et les stratégies sont optimisées quotidiennement.
 
-> **Règle d'or :** "On ne trade que si le modèle confirme un avantage statistique (Edge) > 65%."
+**Market Sentinel** est un moteur de trading quantitatif modulaire conçu pour le marché des **Cryptomonnaies** (et adaptable aux Actions). Il utilise le Machine Learning (XGBoost) et l'Analyse Technique (SMC, indicateurs) pour détecter des opportunités à haute probabilité.
+
+> **Philosophie :** "Nous ne parions pas, nous tradons des distributions de probabilités."
 
 ---
 
 ## 🏗️ Architecture Technique
 
-Le projet a été refactorisé selon une **architecture en couches (Clean Architecture)** pour garantir la scalabilité et la maintenance :
+Le projet suit une **Clean Architecture** stricte pour séparer la logique métier de l'infrastructure :
 
 | Couche | Responsabilité | Module |
 | :--- | :--- | :--- |
-| **Service (Orchestrator)** | Coordonne le flux complet (Scan -> Train -> Publication). | `services.orchestrator` |
-| **Domain (Features)** | Transforme les données brutes en indicateurs (SMC, RSI, MACD). | `features.engineering` |
-| **Strategy (Risk)** | Applique les règles de gestion du capital (Stop Loss, Take Profit). | `strategy.risk` |
-| **Machine Learning** | Gère l'entraînement et la prédiction (XGBoost). | `ml.predictor` |
-| **Data Adapter** | Abstraction des sources de données (Yahoo) et du stockage. | `data.providers` / `data.storage` |
-| **Infrastructure** | Connecteurs externes (API Notion). | `infrastructure.notion` |
-| **Configuration** | Centralisation des variables d'environnement. | `config.settings` |
+| **Pipelines (App)** | Orchestre les flux complets (Training, Backtest, Inference). | `src.pipelines` |
+| **Features (Domain)** | Calcul des indicateurs techniques, Trends (EMA), Volatilité (ATR). | `src.features` |
+| **Strategy (Domain)** | Gestion des risques, Stop Loss Trailing, Dimensionnement de position. | `src.strategy` |
+| **Machine Learning** | Entraînement et prédiction (XGBoost Classifier). | `src.ml` |
+| **Data (Infra)** | Connecteurs boursiers (Binance/CCXT, YFinance) et stockage local. | `src.data` |
+| **Interface** | Point d'entrée CLI pour l'utilisateur. | `main.py` |
 
 ---
 
@@ -26,39 +28,40 @@ Le projet a été refactorisé selon une **architecture en couches (Clean Archit
 
 ```bash
 market_sentinel/
-├── config/                 # Gestion de la configuration (.env)
-│   └── settings.py
-├── data/                   # Couche d'accès aux données
-│   ├── providers/          # Sources externes (Yahoo Finance)
-│   └── storage/            # Persistance locale (Parquet)
-├── features/               # Logique métier (Indicateurs & SMC)
-│   └── engineering.py
-├── ml/                     # Moteur d'Intelligence Artificielle
-│   └── predictor.py        # Wrapper XGBoost
-├── strategy/               # Gestion des risques & Plans de trading
-│   └── risk.py
-├── infrastructure/         # Services externes
-│   └── notion.py           # Client API Notion
-├── services/               # Chefs d'orchestre
-│   └── orchestrator.py     # Pipeline principal
-├── main.py                 # Point d'entrée unique
-└── models/                 # Modèles entraînés (.pkl)
+├── config/                 # Configuration (.env, settings)
+├── data/                   # Données brutes et cache (Parquet)
+├── src/
+│   ├── data/               # Providers (Binance, Yahoo) & Factory
+│   ├── features/           # Ingénierie des indicateurs (RSI, ADX, SMC)
+│   ├── ml/                 # Moteur de prédiction interactif
+│   ├── models/             # Modèles sérialisés (.pkl) par Ticker/Mode
+│   ├── pipelines/          # Workflows (Backtest, Training)
+│   └── strategy/           # Logique de Risk Management
+├── main.py                 # Point d'entrée unique (CLI)
+└── requirements.txt        # Dépendances
 ```
 
 ---
 
-## 📊 État Actuel & Performances
-Target : Classification binaire (Up/Down) à horizon 5 jours.
+## 📊 État Actuel & Objectifs
 
-Accuracy : ~65% sur les signaux de hausse (Backtest 5 ans sur NVDA/TSLA).
+**Focus Actuel :** BTC/USD & ETH/USD.
+**Modes :**
+1.  **Swing (D1/W1) :** Capture des grandes tendances (5-10 jours).
+2.  **Intraday (M15/H1) :** Trading de volatilité court terme (Scapling/DayTrading).
 
-Infrastructure Cloud : Dashboard temps réel sur Notion (Watchlist, Journal de Trading, Labo d'expérience).
+**Performance (En cours d'optimisation) :**
+-   Transition d'un modèle "Actions" vers "Crypto".
+-   Intégration récente de : **Filtre de Tendance EMA 200**, **Trailing Stop ATR**, **Gestion de Position Dynamique**.
+-   Objectif : Valider un Profit Factor > 1.5 sur l'historique récent (60 jours).
 
-## 🚀 Roadmap pour Optimisation (Next Steps)
-L'objectif est de passer d'un modèle tabulaire simple à un système de reconnaissance de Patterns Smart Money Concepts (SMC) :
+## 🚀 Roadmap Technique
+L'objectif est de construire un système autonome et robuste :
 
-### 1. Feature Engineering Avancé
-*   **Fair Value Gaps (FVG)** : Coder la détection mathématique des déséquilibres de prix (Imbalances).
+### 1. Stratégie & Exécution
+*   [x] **Multi-Timeframe** : Analyse conjointe Trend (D1) vs Entry (M15).
+*   [x] **Trailing Stop** : Sorties dynamiques pour laisser courir les gains.
+*   [ ] **Breakeven** : Sécurisation rapide des trades (Risk Free).
 *   **Liquidity & Order Blocks** : Identifier les zones d'accumulation et de distribution institutionnelle.
 *   **Volume Profile** : Intégrer la profondeur de marché dans l'apprentissage.
 
