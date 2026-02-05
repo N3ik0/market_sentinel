@@ -7,7 +7,7 @@ from src.ml.predictor import MarketPredictor
 from src.strategy.risk import RiskManager
 
 class BacktestPipeline:
-    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5):
+    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.35):
         self.ticker = ticker
         self.mode = mode
         self.capital = initial_capital
@@ -20,7 +20,7 @@ class BacktestPipeline:
 from src.data.factory import DataProviderFactory
 
 class BacktestPipeline:
-    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5, source: str = "auto", risk_pct: float = 0.02, adx_threshold: int = 0, trend_filter: bool = False):
+    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.65, source: str = "auto", risk_pct: float = 0.02, adx_threshold: int = 0, trend_filter: bool = False):
         self.ticker = ticker
         self.mode = mode
         self.capital = initial_capital
@@ -171,9 +171,9 @@ class BacktestPipeline:
                      if rsi >= 50:
                          print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} >= 50 - No Momentum)")
                          prediction = 0
-                     elif rsi <= 30:
-                         print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} <= 30 - Oversold)")
-                         prediction = 0
+                    #  elif rsi <= 30:
+                    #      print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} <= 30 - Oversold)")
+                    #      prediction = 0
 
             # CONFIDENCE FILTER
             if confidence < self.threshold and prediction != 0:

@@ -55,7 +55,10 @@ class BinanceDataProvider:
         # Calculate start timestamp based on period
         now = self.exchange.milliseconds()
         duration_ms = 0
-        if period == "2y":
+        if period == "max":
+            # For Crypto 'max' can be huge, let's limit to 5 years (approx 1825 days) for sanity
+            duration_ms = 1825 * 24 * 60 * 60 * 1000
+        elif period == "2y":
             duration_ms = 730 * 24 * 60 * 60 * 1000
         elif period == "1y":
             duration_ms = 365 * 24 * 60 * 60 * 1000
