@@ -27,33 +27,36 @@ Il existe trois pipelines principaux, chacun ayant un rôle précis.
 ### 1. Training Pipeline (`training.py`)
 Responsable de la création du modèle prédictif pour un actif donné.
 
-*   **Entrée** : Ticker (ex: `NVDA`), Période (ex: `5y`).
+*   **Entrée** : Ticker (ex: `BTCUSD`), Période (ex: `2y` ou `60d`), Mode (Swing/Intraday).
 *   **Étapes** :
-    1.  Téléchargement historique complet via Yahoo Finance.
-    2.  Génération de features (Modular Features + Multi-timeframe).
-    3.  Création de la cible (Target) : Classification `Neutral`, `Long`, `Short` basée sur le rendement futur à 5 jours.
-    4.  Entraînement du modèle **XGBoost**.
-    5.  Sauvegarde du modèle dans `src/models/{TICKER}.pkl`.
+    1.  Téléchargement historique via **Binance** (avec Pagination pour Intraday) ou Yahoo.
+    2.  Génération de features (SMC, Trend, Volatilité) adaptées au timeframe (D1 ou M15).
+    3.  Création de la cible (Target) : Classification `Neutral`, `Long`, `Short` basée sur un seuil dynamique (ATR).
+    4.  Entraînement du modèle **XGBoost** avec gestion du déséquilibre de classe.
+    5.  Sauvegarde du modèle dans `src/models/{TICKER}_{MODE}.pkl`.
 
 ### 2. Inference Pipeline (`inference.py`)
-Exécuté quotidiennement pour générer des signaux de trading.
+Exécuté quotidiennement ou toutes les 15min pour générer des signaux.
 
-*   **Entrée** : Ticker.
-*   **Contrainte ⚠️** : Télécharge **2 ans** d'historique minimum.
-    *   *Pourquoi ?* Certains indicateurs (ex: `Vol_Rank20d`) nécessitent une fenêtre glissante de 252 jours (1 an de bourse). Une période plus courte entraînerait des valeurs `NaN` et un crash du modèle.
+*   **Entrée** : Ticker, Mode.
+*   **Contrainte ⚠️** : Télécharge automatiquement l'historique nécessaire pour calculer les indicateurs longs (EMA 200).
 *   **Étapes** :
-    1.  Chargement du modèle `src/models/{TICKER}.pkl`.
-    2.  Récupération des données récentes (2 ans).
+    1.  Chargement du modèle `src/models/{TICKER}_{MODE}.pkl`.
+    2.  Récupération des données récentes via Binance.
     3.  Calcul des indicateurs (Feature Engineering).
-    4.  Prédiction sur la dernière bougie (Dernier jour de clôture).
-    5.  Calcul du plan de trading via `RiskManager` (Stop Loss / Take Profit via ATR).
-    6.  Publication sur Notion (si configuré).
+    4.  Prédiction sur la dernière bougie clôturée.
+    5.  Filtres :
+        *   **Trend Filter** : Vérifie la position du prix vs EMA 200.
+        *   **Confidence** : Vérifie si proba > Seuil (ex: 0.65).
+    6.  Calcul du plan de trading via `RiskManager` (Stop Loss / R:R).
+    7.  Publication sur Notion.
 
 ### 3. Backtest Pipeline (`backtest.py`)
 Simule la performance de la stratégie sur le passé.
 
-*   **Mode** : "Walk-Forward" simulé (Note: le modèle actuel est statique, entraîné sur le passé, testé sur le "futur" immédiat du dataset).
-*   **Rapport** : Génère un rapport de performance (Win Rate, Profit Factor) en console.
+*   **Mode** : Simulation bougie par bougie sur données de test (OOS).
+*   **Stratégie d'Exit** : **Trailing Stop** (Suivi de tendance 3x ATR) ou Take Profit fixe.
+*   **Rapport** : Génère un rapport de performance (Win Rate, Profit Factor, Drawdown) en console.
 
 ---
 
@@ -63,13 +66,12 @@ La génération d'indicateurs est gérée par `FeatureEngineer` (`src/features/e
 
 ### Modules (`src/features/indicators/`)
 *   **`momentum.py`** : RSI, Stochastic, MACD, CCI, Williams %R, ROC, Momentum Rank.
-*   **`trend.py`** : EMA, SMA, Crossovers (Golden Cross), Pentes (Slopes), ADX.
+*   **`trend.py`** : EMA (20, 50, 200), SMA, Crossovers, Pentes (Slopes), ADX.
 *   **`volatility.py`** : ATR, Bollinger Bands (Width, %B), Volatility Rank.
 *   **`volume.py`** : Volume SMA, OBV.
 
 ### Robustesse
-*   **Gestion des `None`** : Les modules vérifient systématiquement si `pandas_ta` retourne un résultat valide avant l'assignation.
-*   **Checks de longueur** : Les indicateurs à longue fenêtre (ex: Momentum Rank 5d sur fenêtre 60j, Volatility Rank sur 252j) sont ignorés si l'historique est insuffisant, évitant ainsi de corrompre tout le dataset.
+*   **Pagination Binance** : Le provider gère le téléchargement fragmenté pour récupérer l'historique complet (ex: 5000+ bougies 15m) nécessaire à l'entraînement Intraday.
 
 ---
 
@@ -81,20 +83,19 @@ Le moteur est basé sur **XGBoost Classifier**.
     0.  **Neutral** (Wait)
     1.  **Long** (Achat)
     2.  **Short** (Vente)
-*   **Stratégie Mono-Asset** :
-    *   Un modèle unique est entraîné par Ticker (ex: `NVDA.pkl` est différent de `TSLA.pkl`).
-    *   Cela permet de capturer la "personnalité" spécifique de chaque action (volatilité, liquidité).
+*   **Stratégie Multi-Mode** :
+    *   Un modèle unique est entraîné par Ticker ET par Mode (ex: `BTCUSD_swing.pkl` vs `BTCUSD_intraday.pkl`).
 *   **Entraînement** :
-    *   Split Temporel (Train sur le passé / Test sur le récent) pour éviter le *Look-ahead bias*.
-    *   Validation set pour le *Early Stopping* (arrête l'entraînement si la performance stagne).
+    *   **Class Weights** : Pondération automatique pour corriger le ratio Signal/Bruit (ex: Booster l'importance des transactions rares).
+    *   Split Temporel (Train sur le passé / Test sur le récent).
 
 ---
 
 ## 🛡️ Risk Management
 
-Géré par `src/strategy/risk.py`.
+Géré par `src/strategy/risk.py` et le pipeline d'exécution.
 
 *   **Logique** : Basée sur l'ATR (Average True Range).
-*   **Stop Loss (SL)** : Placé à `X * ATR` du prix d'entrée (ajuste le stop selon la volatilité actuelle).
-*   **Take Profit (TP)** : Calculé selon un ratio Risque/Rendement (RR) fixe (par défaut 2.0).
-*   **Fallback** : Si l'indicateur ATR est manquant, une valeur de repli (2% du prix) est utilisée pour sécuriser le calcul.
+*   **Stop Loss (SL)** : Placé à `X * ATR` du prix d'entrée.
+*   **Trailing Stop** : Ajustement dynamique du SL pour sécuriser les gains en tendance.
+*   **Position Sizing** : % du capital en risque (ex: 1% ou 2%).
