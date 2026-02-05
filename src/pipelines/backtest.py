@@ -239,6 +239,9 @@ class BacktestPipeline:
                     outcome = "Time Exit ⏱️"
 
             elif prediction == 2: # SIGNAL SHORT
+                if rsi >= 55:
+                    prediction = 0
+                    
                 price = current_row['Close']
                 direction = "SHORT"
                 
