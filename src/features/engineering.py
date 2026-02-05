@@ -212,6 +212,8 @@ class FeatureEngineer:
         unique_features = [c for c in features if c not in df_base.columns] # Avoid duplicates
         
         subset = df_higher[unique_features].copy()
+
+        subset = subset.shift(1)
         
         # Merge using reindex with method='ffill' (Forward fill data from past)
         # 1. Reindex highest df to match base index
