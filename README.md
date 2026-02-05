@@ -83,25 +83,26 @@ pip install -r requirements.txt
 ### 2. Entraînement du Modèle
 Pour télécharger l'historique et entraîner le modèle :
 ```bash
-# Par défaut, utilise 5 ans d'historique (recommandé pour la production)
-python main.py train --ticker TSLA
+# Entraînement en mode SWING (Horizon W1/D1)
+python main.py train --ticker BTCUSD
 
-# Pour spécifier une durée personnalisée (max est souvent l'idéal)
-python main.py train --ticker TSLA --period max
+# Entraînement en mode INTRADAY (Horizon H4/H1)
+# Note : Le provider Binance télécharge automatiquement jusqu'à ~60j d'historique 15m
+python main.py train --ticker BTCUSD --mode intraday
 ```
-Cela génère un fichier `{TICKER}.pkl` dans `src/models/`.
+Cela génère un fichier `{TICKER}_{mode}.pkl` dans `src/models/`.
 
 ### 3. Lancement du Scan (Inférence)
-Pour lancer l'analyse quotidienne et publier sur Notion :
+Pour lancer l'analyse en temps réel et publier sur Notion :
 ```bash
-python main.py predict --ticker TSLA
+python main.py predict --ticker BTCUSD --mode intraday --threshold 0.65
 ```
-Cette commande est légère et conçue pour être exécutée via une tâche CRON.
 
 ### 4. Backtest (Simulation)
-Pour valider la stratégie sur le passé (Paper Trading accéléré) et obtenir les métriques de performance (Win Rate, Profit Factor) :
+Pour valider la stratégie sur le passé avec les nouvelles options (Filtre de Tendance, Seuil de confiance, etc.) :
 ```bash
-python main.py backtest --ticker TSLA --period 2y
+# Backtest Intraday avec Filtre EMA 200 activé et Seuil 0.65
+python main.py backtest --ticker BTCUSD --mode intraday --trend_filter --threshold 0.65 --period 60d
 ```
 
 ---
