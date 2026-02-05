@@ -52,35 +52,64 @@ class BinanceDataProvider:
         timeframe = interval
         if interval == '1W' or interval == '1wk': timeframe = '1w'
         
-        # Calculate limit based on period (approx)
-        # 1y = 365 days. 
-        limit = 1000 # default ccxt
-        
+        # Calculate start timestamp based on period
+        now = self.exchange.milliseconds()
+        duration_ms = 0
         if period == "2y":
-            limit = 730 if interval == '1d' else 1000 # ccxt binance limit is usually 1000
-        elif period == "60d" and interval == '15m':
-             # 60 days * 24h * 4 = 5760 candles. Exceeds single call limit (1000).
-             # We would need pagination.
-             # For MVP V1, we stick to 1000 candles (approx 10 days of 15m data).
-             limit = 1000
+            duration_ms = 730 * 24 * 60 * 60 * 1000
+        elif period == "1y":
+            duration_ms = 365 * 24 * 60 * 60 * 1000
+        elif period.endswith('d'):
+            try:
+                days = int(period[:-1])
+                duration_ms = days * 24 * 60 * 60 * 1000
+            except:
+                duration_ms = 60 * 24 * 60 * 60 * 1000
+        else:
+            # Default 60d
+            duration_ms = 60 * 24 * 60 * 60 * 1000
+            
+        since_ts = now - duration_ms
+        all_ohlcv = []
+        
+        print(f"[*] Fetching full history since {pd.to_datetime(since_ts, unit='ms')}...")
+        
+        # Pagination Loop
+        fetch_since = since_ts
+        while True:
+            try:
+                ohlcv = self.exchange.fetch_ohlcv(self.symbol, timeframe=timeframe, since=fetch_since, limit=1000)
+                if not ohlcv:
+                    break
+                
+                all_ohlcv.extend(ohlcv)
+                
+                last_timestamp = ohlcv[-1][0]
+                fetch_since = last_timestamp + 1
+                
+                # Check if we reached now
+                if last_timestamp >= now - ( interval_ms := 15*60*1000 ): # Approx buffer
+                    break
+                    
+                time.sleep(self.exchange.rateLimit / 1000.0)
+                
+            except Exception as e:
+                print(f"[!] Pagination Error: {e}")
+                break
 
-        try:
-            ohlcv = self.exchange.fetch_ohlcv(self.symbol, timeframe=timeframe, limit=limit)
-            
-            if not ohlcv:
-                print(f"[!] Warning: No data returned for {self.symbol}")
-                return pd.DataFrame()
+        if not all_ohlcv:
+             print(f"[!] Warning: No data returned for {self.symbol}")
+             return pd.DataFrame()
 
-            df = pd.DataFrame(ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            
-            print(f"[+] {len(df)} rows fetched.")
-            return df
-            
-        except Exception as e:
-            print(f"[!] Binance API Error: {e}")
-            return pd.DataFrame()
+        df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
+        
+        # Deduplicate
+        df = df[~df.index.duplicated(keep='first')]
+        
+        print(f"[+] {len(df)} rows fetched.")
+        return df
 
     def fetch_mtf_data(self, intervals: List[str] = None) -> Dict[str, pd.DataFrame]:
         """Fetch multi-timeframe data: 1d, 4h, 1h."""

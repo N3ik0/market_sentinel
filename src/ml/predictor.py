@@ -1,6 +1,7 @@
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.utils.class_weight import compute_sample_weight
 import pandas as pd
 import joblib
 import os
@@ -42,8 +43,28 @@ class MarketPredictor:
 
         print(f"[*] Training XGBoost on {len(X_train)} rows...")
         
+        # --- NEW: Compute Sample Weights ---
+        # "balanced" mode automatically adjusts weights based on class frequency
+        # Low frequency classes (Trades) get High weight.
+        weights = compute_sample_weight(
+            class_weight='balanced',
+            y=y_train
+        )
+        
+        # Print weight statistics for verification
+        classes = sorted(list(set(y_train)))
+        print(f"[i] Class Weights Applied (Balanced):")
+        for c in classes:
+            # Find first index of this class to get its weight
+            sample_idx = y_train[y_train == c].index[0]
+            # Since index is not continuous, we look up based on position if we could, 
+            # but more robustly: average weight for this class
+            mean_weight = weights[y_train == c].mean()
+            print(f"    - Class {c}: {mean_weight:.2f}x multiplier")
+
         self.model.fit(
             X_train, y_train,
+            sample_weight=weights,
             eval_set=[(X_test, y_test)],
             verbose=False
         )

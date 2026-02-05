@@ -20,13 +20,16 @@ class BacktestPipeline:
 from src.data.factory import DataProviderFactory
 
 class BacktestPipeline:
-    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5, source: str = "auto"):
+    def __init__(self, ticker: str, mode: str = "swing", initial_capital: float = 10000.0, threshold: float = 0.5, source: str = "auto", risk_pct: float = 0.02, adx_threshold: int = 0, trend_filter: bool = False):
         self.ticker = ticker
         self.mode = mode
         self.capital = initial_capital
         self.balance = initial_capital
         self.trades = []
         self.threshold = threshold
+        self.risk_pct = risk_pct
+        self.adx_threshold = adx_threshold
+        self.trend_filter = trend_filter
         
         # We use a temporary model for backtesting to avoid overwriting production models
         self.model_file = f"{ticker}_{mode}_backtest.pkl" 
@@ -34,7 +37,7 @@ class BacktestPipeline:
         self.predictor = MarketPredictor(model_name=self.model_file)
 
     def run(self, period: str = "2y"):
-        print(f"\n🧪 STARTING BACKTEST: {self.ticker} [{self.mode.upper()}] | Capital: ${self.capital}")
+        print(f"\n🧪 STARTING BACKTEST: {self.ticker} [{self.mode.upper()}] | Capital: ${self.capital} | Threshold: {self.threshold} | Risk: {self.risk_pct*100}% | ADX: {self.adx_threshold} | Trend Filter: {self.trend_filter}")
         
         # 0. Configure based on Mode
         if self.mode == "intraday":
@@ -73,7 +76,6 @@ class BacktestPipeline:
             self.predictor.train(train_df)
             
             # Simulate on this fold
-            # Simulate on this fold
             metrics = self._simulate(test_df)
             if metrics:
                 results.append(metrics)
@@ -82,17 +84,26 @@ class BacktestPipeline:
             # Reset balance for next fold or keep cumulative? 
             # Standard CV resets to evaluate model performance, not cumulative wealth.
             self.balance = self.capital 
-            self.trades = [] # Clear trades for next fold logic in simulate? 
-            # Actually _simulate currently uses self.trades and self.balance directly.
-            # I should refactor _simulate calls to be cleaner or just reset here.
+            self.trades = [] 
             
         # Summarize CV Results
         print("\n" + "═"*45)
         print("📊 CV AGGREGATED RESULTS")
-        avg_win_rate = np.mean([r['win_rate'] for r in results])
-        avg_profit_factor = np.mean([r['profit_factor'] for r in results])
-        print(f"Avg Win Rate      : {avg_win_rate:.2f}%")
-        print(f"Avg Profit Factor : {avg_profit_factor:.2f}")
+        
+        if results:
+            # Filter out folds with no trades to avoid dragging down win rate with 0.0
+            active_results = [r for r in results if r['total_trades'] > 0]
+            
+            if active_results:
+                avg_win_rate = np.mean([r['win_rate'] for r in active_results])
+                avg_profit_factor = np.mean([r['profit_factor'] for r in active_results])
+                print(f"Avg Win Rate      : {avg_win_rate:.2f}%")
+                print(f"Avg Profit Factor : {avg_profit_factor:.2f}")
+            else:
+                 print("No trades executed in any fold.")
+        else:
+            print("No valid results collected.")
+            
         print("═"*45 + "\n")
 
     def _simulate(self, test_df):
@@ -107,15 +118,52 @@ class BacktestPipeline:
             current_idx = test_df.index[i]
             
             # Predict
-            # Note: In a real rigorous backtest, we would retrain or use a rolling window.
-            # Here we use the fixed model trained on past data.
             features = current_row[self.predictor.features].to_frame().T
             prediction = self.predictor.model.predict(features)[0]
             confidence = self.predictor.predict_proba(features)
+
+            # ADX FILTER (Regime Filter)
+            if self.adx_threshold > 0:
+                # Try to find ADX column
+                adx_cols = [c for c in test_df.columns if 'ADX' in c]
+                if adx_cols:
+                    adx_val = current_row[adx_cols[0]]
+                    if adx_val < self.adx_threshold and prediction != 0:
+                         print(f"  [~] Skipped signal {prediction} at {current_idx} (ADX: {adx_val:.2f} < {self.adx_threshold})")
+                         prediction = 0
             
+            # TREND FILTER (EMA 200)
+            if self.trend_filter:
+                # Find EMA 200 column (could be Daily_EMA_200 or EMA_200)
+                ema_cols = [c for c in test_df.columns if 'EMA_200' in c]
+                if ema_cols:
+                    ema_val = current_row[ema_cols[0]]
+                    price = current_row['Close']
+                    if not np.isnan(ema_val):
+                        if prediction == 1 and price < ema_val:
+                            print(f"  [~] Skipped LONG at {current_idx} (Price {price:.2f} < EMA200 {ema_val:.2f})")
+                            prediction = 0
+                        elif prediction == 2 and price > ema_val:
+                            print(f"  [~] Skipped SHORT at {current_idx} (Price {price:.2f} > EMA200 {ema_val:.2f})")
+                            prediction = 0
+
+            # RSI FILTER (Sanity Check)
+            # Find RSI column
+            rsi_cols = [c for c in test_df.columns if 'RSI_14' in c]
+            if rsi_cols:
+                 rsi = current_row[rsi_cols[0]]
+                 if prediction == 1 and rsi > 70:
+                      print(f"  [~] Skipped LONG at {current_idx} (RSI {rsi:.2f} > 70)")
+                      prediction = 0
+                 elif prediction == 2 and rsi < 30:
+                      print(f"  [~] Skipped SHORT at {current_idx} (RSI {rsi:.2f} < 30)")
+                      prediction = 0
+
             # CONFIDENCE FILTER
-            if confidence < self.threshold:
-                prediction = 0 # Force Wait
+            if confidence < self.threshold and prediction != 0:
+                 # Only print if it was originally a signal (1 or 2)
+                 print(f"  [~] Skipped signal {prediction} at {current_idx} (Conf: {confidence:.2f} < {self.threshold})")
+                 prediction = 0 # Force Wait
             
             if prediction == 1: # SIGNAL LONG
                 price = current_row['Close']
@@ -123,48 +171,54 @@ class BacktestPipeline:
                 
                 # Get Strategy Params
                 plan = rm.generate_scenario(self.ticker, price, prediction, test_df.iloc[:i+1])
-                
                 sl = plan['sl']
-                tp = plan['tp']
+                risk_per_share = price - sl
                 
-                # Check Outcome in next 5 days
+                # TARGETS
+                tp = price + (risk_per_share * 3.0) # Fixed 3R
+                breakeven_trigger = price + risk_per_share # 1R Trigger
+                
                 outcome = "HOLD"
                 pnl = 0
+                sl_moved_to_be = False
                 
-                # Look forward 5 candles
-                future_window = test_df.iloc[i+1 : i+6]
+                future_window = test_df.iloc[i+1 : i+50] 
                 
                 for _, future_row in future_window.iterrows():
-                    # Check Low for SL
-                    if future_row['Low'] <= sl:
-                        outcome = "SL Hit ❌"
-                        loss_per_share = price - sl
-                        if loss_per_share <= 0: continue # Should not happen unless gap
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        pnl = -risk_amt
-                        break
+                    current_high = future_row['High']
+                    current_low = future_row['Low']
                     
-                    # Check High for TP
-                    if future_row['High'] >= tp:
-                        outcome = "TP Hit 🚀"
-                        gain_per_share = tp - price
-                        loss_per_share = price - sl
-                        if loss_per_share <= 0: continue
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        pnl = qty * gain_per_share
+                    # Check Breakeven Trigger
+                    if not sl_moved_to_be and current_high >= breakeven_trigger:
+                        sl = price # Move SL to Entry
+                        sl_moved_to_be = True
+                        
+                    # Check TP Hit
+                    if current_high >= tp:
+                        outcome = "TP Hit (3R) 🚀"
+                        exit_price = tp
+                        qty = (self.balance * self.risk_pct) / risk_per_share
+                        pnl = qty * (exit_price - price)
+                        break
+
+                    # Check SL Hit
+                    if current_low <= sl:
+                        if sl_moved_to_be:
+                            outcome = "Breakeven 🛡️"
+                            pnl = 0
+                        else:
+                            outcome = "SL Hit ❌"
+                            risk_amt = self.balance * self.risk_pct
+                            pnl = -risk_amt
+                        exit_price = sl
                         break
                         
-                # If neither hit in 5 days, close at market
+                # Time Exit
                 if outcome == "HOLD":
                     exit_price = future_window.iloc[-1]['Close']
-                    loss_per_share = price - sl
-                    if loss_per_share > 0:
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        pnl = qty * (exit_price - price)
-                        outcome = "Time Exit ⏱️"
+                    qty = (self.balance * self.risk_pct) / risk_per_share
+                    pnl = qty * (exit_price - price)
+                    outcome = "Time Exit ⏱️"
 
             elif prediction == 2: # SIGNAL SHORT
                 price = current_row['Close']
@@ -172,44 +226,52 @@ class BacktestPipeline:
                 
                 plan = rm.generate_scenario(self.ticker, price, prediction, test_df.iloc[:i+1])
                 sl = plan['sl']
-                tp = plan['tp']
+                risk_per_share = sl - price
+                
+                # TARGETS
+                tp = price - (risk_per_share * 3.0) # Fixed 3R
+                breakeven_trigger = price - risk_per_share # 1R Trigger
                 
                 outcome = "HOLD"
                 pnl = 0
+                sl_moved_to_be = False
                 
-                future_window = test_df.iloc[i+1 : i+6]
+                future_window = test_df.iloc[i+1 : i+50]
                 
                 for _, future_row in future_window.iterrows():
-                    # Check High for SL (Short SL is above Price)
-                    if future_row['High'] >= sl:
-                        outcome = "SL Hit ❌"
-                        loss_per_share = sl - price
-                        if loss_per_share <= 0: continue
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        pnl = -risk_amt
-                        break
+                    current_high = future_row['High']
+                    current_low = future_row['Low']
                     
-                    # Check Low for TP (Short TP is below Price)
-                    if future_row['Low'] <= tp:
-                        outcome = "TP Hit 🚀"
-                        gain_per_share = price - tp
-                        loss_per_share = sl - price
-                        if loss_per_share <= 0: continue
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        pnl = qty * gain_per_share
+                    # Check Breakeven Trigger
+                    if not sl_moved_to_be and current_low <= breakeven_trigger:
+                        sl = price # Move SL to Entry
+                        sl_moved_to_be = True
+                        
+                    # Check TP Hit
+                    if current_low <= tp:
+                        outcome = "TP Hit (3R) 🚀"
+                        exit_price = tp
+                        qty = (self.balance * self.risk_pct) / risk_per_share
+                        pnl = qty * (price - exit_price) 
+                        break
+
+                    # Check SL Hit
+                    if current_high >= sl:
+                        if sl_moved_to_be:
+                            outcome = "Breakeven 🛡️"
+                            pnl = 0
+                        else:
+                            outcome = "SL Hit ❌"
+                            risk_amt = self.balance * self.risk_pct
+                            pnl = -risk_amt
+                        exit_price = sl
                         break
 
                 if outcome == "HOLD":
                     exit_price = future_window.iloc[-1]['Close']
-                    loss_per_share = sl - price
-                    if loss_per_share > 0:
-                        risk_amt = self.balance * 0.02
-                        qty = risk_amt / loss_per_share
-                        # Profit = Entry - Exit
-                        pnl = qty * (price - exit_price) 
-                        outcome = "Time Exit ⏱️"
+                    qty = (self.balance * self.risk_pct) / risk_per_share
+                    pnl = qty * (price - exit_price) 
+                    outcome = "Time Exit ⏱️"
             
             else: # NEUTRAL
                 continue
@@ -224,6 +286,7 @@ class BacktestPipeline:
                 "PnL": round(pnl, 2),
                 "Balance": round(self.balance, 2)
             })
+            print(f"  [Trade] {direction} @ {price:.2f} -> {outcome} ({pnl:+.2f}) Balance: {self.balance:.2f}")
 
         return self._report(return_metrics=True)
 
@@ -234,7 +297,8 @@ class BacktestPipeline:
                 return {
                     "win_rate": 0.0,
                     "profit_factor": 0.0,
-                    "final_balance": self.balance
+                    "final_balance": self.balance,
+                    "total_trades": 0
                 }
             return
 
@@ -244,7 +308,10 @@ class BacktestPipeline:
         
         total_trades = len(df_res)
         win_rate = (len(wins) / total_trades) * 100
-        profit_factor = wins['PnL'].sum() / abs(losses['PnL'].sum()) if len(losses) > 0 else 0
+        
+        # Safe Profit Factor
+        total_loss = abs(losses['PnL'].sum())
+        profit_factor = wins['PnL'].sum() / total_loss if total_loss > 0 else float('inf')
         
         print("\n" + "═"*45)
         print(f"📝 FOLD RESULTS")
@@ -258,5 +325,6 @@ class BacktestPipeline:
             return {
                 "win_rate": win_rate,
                 "profit_factor": profit_factor,
-                "final_balance": self.balance
+                "final_balance": self.balance,
+                "total_trades": total_trades
             }

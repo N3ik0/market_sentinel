@@ -27,6 +27,10 @@ def add_trend_features(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     if ema50 is not None:
         df[f'{prefix}EMA_50'] = ema50
 
+    ema200 = ta.ema(df['Close'], length=200)
+    if ema200 is not None:
+        df[f'{prefix}EMA_200'] = ema200
+
     # SMA: Simple Moving Averages
     sma5 = ta.sma(df['Close'], length=5)
     if sma5 is not None:

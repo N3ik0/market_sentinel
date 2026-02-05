@@ -31,6 +31,10 @@ def main():
     backtest_parser.add_argument("--ticker", type=str, default="BTCUSD", help="Ticker symbol")
     backtest_parser.add_argument("--period", type=str, default="2y", help="Data period")
     backtest_parser.add_argument("--mode", type=str, default="swing", choices=["swing", "intraday"], help="Trading mode")
+    backtest_parser.add_argument("--threshold", type=float, default=0.5, help="Confidence threshold (default: 0.5)")
+    backtest_parser.add_argument("--risk", type=float, default=0.02, help="Risk per trade as decimal (default: 0.02 for 2%)")
+    backtest_parser.add_argument("--filter_adx", type=int, default=0, help="Minimum ADX to trade (0 to disable, suggested 20-25)")
+    backtest_parser.add_argument("--trend_filter", action="store_true", help="Enable EMA 200 Trend Filter")
     
     # Global args (could be parent parser, but for now adding to each or just one)
     # Ideally add to all or as a mixin. Simple way: Add to each.
@@ -50,7 +54,7 @@ def main():
         pipeline.run()
 
     elif args.command == "backtest":
-        pipeline = BacktestPipeline(args.ticker, mode=args.mode, source=args.source)
+        pipeline = BacktestPipeline(args.ticker, mode=args.mode, source=args.source, threshold=args.threshold, risk_pct=args.risk, adx_threshold=args.filter_adx, trend_filter=args.trend_filter)
         pipeline.run(period=args.period)
         
     else:

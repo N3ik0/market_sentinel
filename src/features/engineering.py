@@ -244,10 +244,10 @@ class FeatureEngineer:
             if 'ATR_Pct' not in self.df.columns:
                 self.df['ATR_Pct'] = self.df[atr_col] / self.df['Close']
             
-            # Target = 1.5x ATR of movement
+            # Target = 1.0x ATR of movement (Relaxed from 1.5x)
             # We use a rolling mean of ATR Pct to stabilize targets? Or spot?
             # Let's use spot ATR.
-            dynamic_thresh = 1.5 * self.df['ATR_Pct']
+            dynamic_thresh = 1.0 * self.df['ATR_Pct']
             
             # Clip minimum threshold to avoid noise (e.g. 0.5%)
             dynamic_thresh = dynamic_thresh.clip(lower=0.005)
